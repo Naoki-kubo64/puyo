@@ -76,6 +76,7 @@ class PuyoGrid:
         # 連鎖情報
         self.total_chains = 0
         self.last_chain_score = 0
+        self.last_chain_positions: Set[Tuple[int, int]] = set()  # 最後の連鎖で消去されたぷよの位置
         
         # アニメーション用データ
         self.disappearing_puyos: Dict[Tuple[int, int], dict] = {}  # 消去中のぷよ
@@ -97,6 +98,7 @@ class PuyoGrid:
         
         self.total_chains = 0
         self.last_chain_score = 0
+        self.last_chain_positions.clear()
         logger.info("Grid cleared")
     
     def is_valid_position(self, x: int, y: int) -> bool:
@@ -273,6 +275,25 @@ class PuyoGrid:
         final_score = int(base_points * connection_bonus * color_bonus)
         return max(final_score, 40)  # 最低40点保証
     
+    def _record_chain_positions(self, positions: Set[PuyoPosition]):
+        """連鎖で消去される位置を記録（内部用）"""
+        for pos in positions:
+            self.last_chain_positions.add((pos.x, pos.y))
+    
+    def get_last_chain_positions(self) -> List[Tuple[int, int]]:
+        """最後の連鎖で消去されたぷよの位置を取得し、クリアする
+        
+        Returns:
+            List[Tuple[int, int]]: 消去されたぷよの位置のリスト [(x, y), ...]
+            
+        Note:
+            この方法を呼び出すと内部の位置リストはクリアされます。
+            重複した特殊効果を避けるため。
+        """
+        positions = list(self.last_chain_positions)
+        self.last_chain_positions.clear()  # 使用後にクリア
+        return positions
+    
     def eliminate_puyos(self, positions: Set[PuyoPosition]) -> int:
         """指定位置のぷよを消去（フェードアウトアニメーション付き）"""
         eliminated_count = 0
@@ -370,11 +391,17 @@ class PuyoGrid:
         if not chains:
             return 0, 0
         
+        # 連鎖位置をクリア
+        self.last_chain_positions.clear()
+        
         total_score = 0
         total_eliminated = 0
         
         # 全ての連鎖を実行
         for chain in chains:
+            # 連鎖位置を記録
+            self._record_chain_positions(chain.eliminated_puyos)
+            
             eliminated_count = self.eliminate_puyos(chain.eliminated_puyos)
             total_score += chain.score
             total_eliminated += eliminated_count
@@ -396,6 +423,9 @@ class PuyoGrid:
         total_eliminated = 0
         chain_level = 0
         
+        # 連鎖位置をクリア
+        self.last_chain_positions.clear()
+        
         # 最初に重力を適用
         self.apply_gravity()
         
@@ -416,6 +446,9 @@ class PuyoGrid:
             # 各塊を順番に消去（本家の仕様）
             for i, chain in enumerate(chains):
                 logger.info(f"Eliminating chain {i+1}/{len(chains)}: {len(chain.eliminated_puyos)} {chain.chain_type.name} puyos")
+                
+                # 連鎖位置を記録
+                self._record_chain_positions(chain.eliminated_puyos)
                 
                 # 塊を個別に消去
                 eliminated_count = self.eliminate_puyos(chain.eliminated_puyos)
@@ -456,6 +489,7 @@ class PuyoGrid:
         self.disappearing_puyos.clear()
         self.chain_queue.clear()
         self.current_chain_timer = 0.0
+        self.last_chain_positions.clear()  # 連鎖位置をクリア
         
         # 最初に重力を適用
         gravity_applied = self.apply_gravity()
@@ -500,6 +534,9 @@ class PuyoGrid:
             chain = self.chain_queue.pop(0)
             
             logger.info(f"Eliminating chain group: {len(chain.eliminated_puyos)} {chain.chain_type.name} puyos")
+            
+            # 連鎖位置を記録
+            self._record_chain_positions(chain.eliminated_puyos)
             
             # 塊を消去
             eliminated_count = self.eliminate_puyos(chain.eliminated_puyos)
@@ -883,6 +920,8 @@ if __name__ == "__main__":
     
     grid.drop_puyo(1, PuyoType.BLUE)
     grid.drop_puyo(1, PuyoType.BLUE)
+    grid.drop_puyo(1, PuyoType.BLUE)
+    grid.drop_puyo(1, PuyoType.BLUE)
     
     print("Grid state:")
     print(grid)
@@ -890,6 +929,14 @@ if __name__ == "__main__":
     # 連鎖テスト
     score, eliminated = grid.execute_full_chain_sequence()
     print(f"\nChain result: Score={score}, Eliminated={eliminated}")
+    
+    # Test the new get_last_chain_positions method
+    chain_positions = grid.get_last_chain_positions()
+    print(f"Chain positions: {chain_positions}")
+    
+    # Test that positions are cleared after use
+    chain_positions_2 = grid.get_last_chain_positions()
+    print(f"Chain positions after second call (should be empty): {chain_positions_2}")
     
     print("\nGrid after chain:")
     print(grid)

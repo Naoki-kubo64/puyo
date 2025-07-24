@@ -15,6 +15,7 @@ from ..core.top_ui_bar import TopUIBar
 from .enemy import Enemy, EnemyAction, EnemyGroup, create_enemy_group, ActionType
 from .enemy_renderer import EnemyRenderer
 from .enemy_intent_renderer import EnemyIntentRenderer
+from ..special_puyo.special_puyo import special_puyo_manager
 
 logger = logging.getLogger(__name__)
 
@@ -34,24 +35,67 @@ class Player:
         # 視覚効果
         self.damage_flash_timer = 0.0
         self.damage_flash_duration = 0.5
-    
-    def take_damage(self, damage: int) -> bool:
-        """ダメージを受ける"""
-        if not self.is_alive:
-            return False
         
-        self.current_hp -= damage
+        # 特殊効果システム
+        self.buffs = {}          # {buff_type: [value, duration]}
+        self.debuffs = {}        # {debuff_type: [value, duration]}
+        self.shields = {}        # {shield_type: [remaining_absorption, duration]}
+        
+        # 攻撃力修正
+        self.attack_multiplier = 1.0
+        
+        # 反射効果
+        self.reflect_active = False
+        self.reflect_power = 0
+        self.reflect_duration = 0.0
+    
+    def take_damage(self, damage: int) -> tuple[bool, int]:
+        """ダメージを受ける（シールドや反射を考慮）"""
+        if not self.is_alive:
+            return False, 0
+        
+        original_damage = damage
+        final_damage = damage
+        reflected_damage = 0
+        
+        # 反射効果の処理
+        if self.reflect_active:
+            reflected_damage = int(final_damage * (self.reflect_power / 100))
+            final_damage = final_damage - reflected_damage
+            logger.info(f"Reflected {reflected_damage} damage back to enemy")
+        
+        # シールド効果の処理
+        for shield_type in list(self.shields.keys()):
+            remaining_absorption, duration = self.shields[shield_type]
+            if remaining_absorption > 0:
+                absorbed = min(final_damage, remaining_absorption)
+                final_damage -= absorbed
+                self.shields[shield_type][0] -= absorbed
+                
+                # 吸収シールドの場合はHPに変換
+                if shield_type == "absorb":
+                    self.heal(absorbed)
+                
+                logger.info(f"Shield absorbed {absorbed} damage, {self.shields[shield_type][0]} remaining")
+                
+                if self.shields[shield_type][0] <= 0:
+                    del self.shields[shield_type]
+                    logger.info(f"{shield_type} shield depleted")
+                break
+        
+        # 最終ダメージを適用
+        self.current_hp -= final_damage
         self.damage_flash_timer = self.damage_flash_duration
         
-        logger.info(f"Player took {damage} damage ({self.current_hp}/{self.max_hp})")
+        logger.info(f"Player took {final_damage} damage (original: {original_damage}) ({self.current_hp}/{self.max_hp})")
         
         if self.current_hp <= 0:
             self.current_hp = 0
             self.is_alive = False
             logger.info("Player defeated!")
-            return True
+            return True, reflected_damage
         
-        return False
+        return False, reflected_damage
     
     def heal(self, amount: int):
         """回復"""
@@ -62,6 +106,85 @@ class Player:
         """更新処理"""
         if self.damage_flash_timer > 0:
             self.damage_flash_timer -= dt
+        
+        # バフ・デバフの更新
+        self._update_effects(dt)
+    
+    def _update_effects(self, dt: float):
+        """バフ・デバフ効果を更新"""
+        # バフの更新
+        for buff_type in list(self.buffs.keys()):
+            self.buffs[buff_type][1] -= dt
+            if self.buffs[buff_type][1] <= 0:
+                self._remove_buff(buff_type)
+        
+        # デバフの更新
+        for debuff_type in list(self.debuffs.keys()):
+            self.debuffs[debuff_type][1] -= dt
+            if self.debuffs[debuff_type][1] <= 0:
+                del self.debuffs[debuff_type]
+        
+        # シールドの更新
+        for shield_type in list(self.shields.keys()):
+            self.shields[shield_type][1] -= dt
+            if self.shields[shield_type][1] <= 0:
+                del self.shields[shield_type]
+                logger.info(f"{shield_type} shield expired")
+        
+        # 反射効果の更新
+        if self.reflect_active:
+            self.reflect_duration -= dt
+            if self.reflect_duration <= 0:
+                self.reflect_active = False
+                self.reflect_power = 0
+                logger.info("Reflect effect expired")
+        
+        # 攻撃力修正の計算
+        self._calculate_attack_multiplier()
+    
+    def _calculate_attack_multiplier(self):
+        """攻撃力修正を計算"""
+        multiplier = 1.0
+        
+        # バフによる攻撃力増加
+        if "attack_buff" in self.buffs:
+            boost = self.buffs["attack_buff"][0] / 100
+            multiplier *= (1 + boost)
+        
+        # デバフによる攻撃力減少（将来の拡張用）
+        if "attack_debuff" in self.debuffs:
+            reduction = self.debuffs["attack_debuff"][0] / 100
+            multiplier *= (1 - reduction)
+        
+        self.attack_multiplier = multiplier
+    
+    def _remove_buff(self, buff_type: str):
+        """バフを削除"""
+        if buff_type in self.buffs:
+            del self.buffs[buff_type]
+            logger.info(f"Player buff expired: {buff_type}")
+    
+    def apply_buff(self, buff_type: str, value: int, duration: float):
+        """バフを適用"""
+        self.buffs[buff_type] = [value, duration]
+        logger.info(f"Player received buff: {buff_type} (+{value}%) for {duration}s")
+    
+    def apply_debuff(self, debuff_type: str, value: int, duration: float):
+        """デバフを適用"""
+        self.debuffs[debuff_type] = [value, duration]
+        logger.info(f"Player received debuff: {debuff_type} (-{value}%) for {duration}s")
+    
+    def apply_shield(self, shield_type: str, absorption: int, duration: float):
+        """シールドを適用"""
+        self.shields[shield_type] = [absorption, duration]
+        logger.info(f"Player received shield: {shield_type} (absorbs {absorption} damage) for {duration}s")
+    
+    def apply_reflect(self, power: int, duration: float):
+        """反射効果を適用"""
+        self.reflect_active = True
+        self.reflect_power = power
+        self.reflect_duration = duration
+        logger.info(f"Player received reflect: {power}% reflection for {duration}s")
 
 
 class BattleHandler:
@@ -128,6 +251,11 @@ class BattleHandler:
         # ぷよぷよシステム更新
         self.puyo_handler.update(dt)
         
+        # 特殊ぷよシステム更新
+        timed_effects = special_puyo_manager.update(dt)
+        for effect in timed_effects:
+            self._apply_special_effect(effect)
+        
         # 連鎖によるダメージ処理
         self._check_chain_damage()
         
@@ -155,18 +283,39 @@ class BattleHandler:
         if last_score > 0:
             # スコアをダメージに変換
             base_damage = last_score // CHAIN_SCORE_BASE
-            chain_damage = int(base_damage * self.chain_damage_multiplier)
             
-            if chain_damage > 0:
+            # プレイヤーの攻撃力修正を適用
+            modified_damage = int(base_damage * self.player.attack_multiplier * self.chain_damage_multiplier)
+            
+            # 特殊ぷよによる連鎖の処理
+            chain_positions = self.puyo_handler.puyo_grid.get_last_chain_positions()
+            special_effects = special_puyo_manager.trigger_chain_effects(
+                chain_positions, 
+                battle_context=self, 
+                puyo_grid=self.puyo_handler.puyo_grid
+            )
+            
+            # 特殊効果の適用
+            for effect in special_effects:
+                self._apply_special_effect(effect)
+                
+                # ダメージ倍率効果
+                if effect.get('type') == 'damage_multiplier':
+                    multiplier = effect['power'] / 100
+                    modified_damage = int(modified_damage * multiplier)
+                    logger.info(f"Damage multiplied by {multiplier}x to {modified_damage}")
+            
+            if modified_damage > 0:
                 # 選択中の敵にダメージ
                 target = self.enemy_group.get_selected_target()
                 if target:
-                    defeated = target.take_damage(chain_damage)
-                    self.player.total_damage_dealt += chain_damage
+                    defeated = target.take_damage(modified_damage)
+                    self.player.total_damage_dealt += modified_damage
+                    self.player.total_chains_made += 1
                     
                     # ダメージ数値表示
                     target_pos = self._get_enemy_display_position(target)
-                    self._add_damage_number(chain_damage, Colors.YELLOW, target_pos)
+                    self._add_damage_number(modified_damage, Colors.YELLOW, target_pos)
                     
                     # 全敵が倒されたかチェック
                     if self.enemy_group.is_all_defeated():
@@ -176,7 +325,7 @@ class BattleHandler:
                 # スコアをリセット（重複処理を防ぐ）
                 self.puyo_handler.puyo_grid.last_chain_score = 0
                 
-                logger.info(f"Chain dealt {chain_damage} damage to enemy")
+                logger.info(f"Chain dealt {modified_damage} damage to enemy (base: {base_damage}, multiplier: {self.player.attack_multiplier:.2f})")
     
     def _execute_enemy_action(self, enemy: Enemy, action: EnemyAction):
         """敵の行動を実行"""
@@ -189,7 +338,23 @@ class BattleHandler:
                 boost = enemy.buffs["attack_buff"][0] / 100
                 final_damage = int(final_damage * (1 + boost))
             
-            defeated = self.player.take_damage(final_damage)
+            # 呪い効果による敵攻撃力減少
+            if "curse_debuff" in enemy.debuffs:
+                reduction = enemy.debuffs["curse_debuff"][0] / 100
+                final_damage = int(final_damage * (1 - reduction))
+                logger.info(f"Enemy attack reduced by curse: {action.damage} -> {final_damage}")
+            
+            defeated, reflected_damage = self.player.take_damage(final_damage)
+            
+            # 反射ダメージを敵に与える
+            if reflected_damage > 0:
+                enemy_defeated = enemy.take_damage(reflected_damage)
+                self._add_damage_number(reflected_damage, Colors.ORANGE, self._get_enemy_display_position(enemy))
+                logger.info(f"Reflected {reflected_damage} damage to {enemy.get_display_name()}")
+                
+                if enemy_defeated and self.enemy_group.is_all_defeated():
+                    self.battle_result = "victory"
+                    self.battle_active = False
             
             # ダメージ数値表示
             self._add_damage_number(final_damage, Colors.RED, target_player=True)
@@ -216,6 +381,72 @@ class BattleHandler:
         elif action.action_type == ActionType.DEBUFF:
             # プレイヤーにデバフ適用（今後実装）
             logger.info(f"{enemy.get_display_name()} attempted to debuff player")
+    
+    def _apply_special_effect(self, effect: dict):
+        """特殊ぷよの効果を適用"""
+        effect_type = effect.get('effect_type', '')
+        power = effect.get('power', 0)
+        duration = effect.get('duration', 0.0)
+        
+        if effect_type == 'attack_buff':
+            # バフぷよ：攻撃力上昇
+            self.player.apply_buff('attack_buff', power, duration)
+            
+        elif effect_type == 'heal_player':
+            # 回復ぷよ：HP回復
+            self.player.heal(power)
+            
+        elif effect_type == 'damage_reduction':
+            # シールドぷよ：ダメージ軽減シールド
+            self.player.apply_shield('damage_reduction', power, duration)
+            
+        elif effect_type == 'absorb_barrier':
+            # 吸収シールドぷよ：ダメージを吸収してHP変換
+            self.player.apply_shield('absorb', power, duration)
+            
+        elif effect_type == 'damage_reflect':
+            # 反射ぷよ：ダメージ反射
+            self.player.apply_reflect(power, duration)
+            
+        elif effect_type == 'freeze_enemy':
+            # 氷ぷよ：敵の行動遅延
+            target = self.enemy_group.get_selected_target()
+            if target:
+                target.apply_stun(power)
+                logger.info(f"Frozen {target.get_display_name()} for {power}s")
+            
+        elif effect_type == 'enemy_curse':
+            # 呪いぷよ：敵の攻撃力減少
+            target = self.enemy_group.get_selected_target()
+            if target:
+                target.apply_debuff('curse_debuff', power, duration)
+                logger.info(f"Cursed {target.get_display_name()}: -{power}% attack for {duration}s")
+            
+        elif effect_type == 'poison_enemy':
+            # 毒ぷよ：敵に継続ダメージ
+            target = self.enemy_group.get_selected_target()
+            if target:
+                # 即座にダメージを与える（簡易実装）
+                target.take_damage(power)
+                logger.info(f"Poisoned {target.get_display_name()} for {power} damage")
+                
+        elif effect_type == 'delayed_poison':
+            # 時限毒ぷよ：遅延毒ダメージ
+            target = self.enemy_group.get_selected_target()
+            if target:
+                target.take_damage(power)
+                logger.info(f"Timed poison dealt {power} damage to {target.get_display_name()}")
+                
+        elif effect_type == 'explosion' or effect_type == 'lightning_strike':
+            # 爆弾・雷ぷよ：直接ダメージ
+            target = self.enemy_group.get_selected_target()
+            if target:
+                target.take_damage(power)
+                logger.info(f"Special attack dealt {power} damage to {target.get_display_name()}")
+        
+        # 効果の視覚的フィードバック
+        if effect.get('description'):
+            logger.info(f"Special effect activated: {effect['description']}")
     
     def _add_damage_number(self, damage: int, color: tuple, target_player: bool = False, position: tuple = None):
         """ダメージ数値を追加"""
