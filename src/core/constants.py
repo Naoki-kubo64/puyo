@@ -83,7 +83,7 @@ FAST_FALL_SPEED = 0.05  # より高速に
 
 # 連鎖設定
 MIN_CHAIN_LENGTH = 4  # 連鎖に必要な最小個数
-CHAIN_SCORE_BASE = 100  # 基本スコア
+CHAIN_SCORE_BASE = 10   # 基本スコア（ダメージ計算用、10分の1に削減）
 CHAIN_MULTIPLIER = 1.5  # 連鎖倍率
 
 # ============================================================================
@@ -95,9 +95,9 @@ PLAYER_MAX_HP = 100
 PLAYER_INITIAL_HP = 100
 
 # 敵初期値
-ENEMY_BASE_HP = 50
-ENEMY_ATTACK_DAMAGE = 15
-ENEMY_ATTACK_INTERVAL = 3.0  # 秒
+ENEMY_BASE_HP = 30  # 敵のHPを削減してバランス調整
+ENEMY_ATTACK_DAMAGE = 10  # 敵の攻撃力を削減
+ENEMY_ATTACK_INTERVAL = 5.0  # 秒（プレイヤーに連鎖を組む時間を与える）
 
 # ダメージ計算
 DAMAGE_PER_PUYO = 10
