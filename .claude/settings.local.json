@@ -10,7 +10,8 @@
       "Bash(ls:*)",
       "Bash(python:*)",
       "Bash(timeout:*)",
-      "Bash(file:*)"
+      "Bash(file:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
