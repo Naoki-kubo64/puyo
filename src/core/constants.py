@@ -95,13 +95,18 @@ PLAYER_MAX_HP = 100
 PLAYER_INITIAL_HP = 100
 
 # 敵初期値
-ENEMY_BASE_HP = 30  # 敵のHPを削減してバランス調整
-ENEMY_ATTACK_DAMAGE = 10  # 敵の攻撃力を削減
-ENEMY_ATTACK_INTERVAL = 5.0  # 秒（プレイヤーに連鎖を組む時間を与える）
+ENEMY_BASE_HP = 20  # 初期敵HP（ダンジョン進行で強化される前提）
+ENEMY_ATTACK_DAMAGE = 8   # 初期敵攻撃力（ダンジョン進行で強化される前提）
+ENEMY_ATTACK_INTERVAL = 6.0  # 秒（初心者に優しい間隔、後で短縮）
 
 # ダメージ計算
 DAMAGE_PER_PUYO = 10
 CHAIN_DAMAGE_MULTIPLIER = 1.2
+
+# ダンジョン進行システム
+FLOOR_SCALING_HP = 1.25     # フロアごとの敵HP倍率（より緩やか）
+FLOOR_SCALING_DAMAGE = 1.15 # フロアごりの敵攻撃力倍率（より緩やか）
+FLOOR_SCALING_SPEED = 0.92  # フロアごとの敵攻撃間隔倍率（短縮をより緩やか）
 
 # ============================================================================
 # カードシステム関連
