@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(rm:*)",
+      "Bash(grep:*)",
+      "Bash(\"C:\\Program Files\\Unity\\Hub\\Editor\\2022.3.12f1\\Editor\\Unity.exe\" -batchmode -quit -projectPath . -buildTarget StandaloneWindows64 -logFile build_test.log)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(python:*)",
+      "Bash(timeout:*)",
+      "Bash(file:*)"
+    ],
+    "deny": []
+  }
+}
