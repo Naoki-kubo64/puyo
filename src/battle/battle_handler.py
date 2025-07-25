@@ -286,9 +286,13 @@ class BattleHandler:
         # 最後の連鎖スコアが更新されていたらダメージを与える
         last_score = self.puyo_handler.puyo_grid.last_chain_score
         
+        # デバッグ情報を追加
+        if last_score > 0:
+            logger.debug(f"Chain detected! Score: {last_score}")
+        
         if last_score > 0:
             # スコアをダメージに変換
-            base_damage = last_score // CHAIN_SCORE_BASE
+            base_damage = max(1, last_score // CHAIN_SCORE_BASE)  # 最低1ダメージ保証
             
             # プレイヤーの攻撃力修正を適用
             modified_damage = int(base_damage * self.player.attack_multiplier * self.chain_damage_multiplier)
@@ -311,27 +315,36 @@ class BattleHandler:
                     modified_damage = int(modified_damage * multiplier)
                     logger.info(f"Damage multiplied by {multiplier}x to {modified_damage}")
             
-            if modified_damage > 0:
-                # 選択中の敵にダメージ
-                target = self.enemy_group.get_selected_target()
-                if target:
-                    defeated = target.take_damage(modified_damage)
-                    self.player.total_damage_dealt += modified_damage
-                    self.player.total_chains_made += 1
-                    
-                    # ダメージ数値表示
-                    target_pos = self._get_enemy_display_position(target)
-                    self._add_damage_number(modified_damage, Colors.YELLOW, target_pos)
-                    
-                    # 全敵が倒されたかチェック
-                    if self.enemy_group.is_all_defeated():
-                        self.battle_result = "victory"
-                        self.battle_active = False
+            # 最低ダメージ保証（テスト用）
+            if modified_damage <= 0:
+                modified_damage = 1
+                logger.warning(f"Damage was <= 0, set to 1 for testing")
+            
+            # 選択中の敵にダメージ
+            target = self.enemy_group.get_selected_target()
+            if target:
+                defeated = target.take_damage(modified_damage)
+                self.player.total_damage_dealt += modified_damage
+                self.player.total_chains_made += 1
                 
-                # スコアをリセット（重複処理を防ぐ）
-                self.puyo_handler.puyo_grid.last_chain_score = 0
+                # ダメージ数値表示
+                target_pos = self._get_enemy_display_position(target)
+                self._add_damage_number(modified_damage, Colors.YELLOW, target_pos)
                 
-                logger.info(f"Chain dealt {modified_damage} damage to enemy (base: {base_damage}, multiplier: {self.player.attack_multiplier:.2f})")
+                logger.info(f"Chain dealt {modified_damage} damage to {target.enemy_type} (HP: {target.current_hp}/{target.max_hp})")
+                
+                # 全敵が倒されたかチェック
+                if self.enemy_group.is_all_defeated():
+                    self.battle_result = "victory"
+                    self.battle_active = False
+                    logger.info("All enemies defeated - Victory!")
+            else:
+                logger.warning("No target selected for chain damage!")
+            
+            # スコアをリセット（重複処理を防ぐ）
+            self.puyo_handler.puyo_grid.last_chain_score = 0
+            
+            logger.info(f"Chain attack: {last_score} score -> {base_damage} base damage -> {modified_damage} final damage")
     
     def _execute_enemy_action(self, enemy: Enemy, action: EnemyAction):
         """敵の行動を実行"""
