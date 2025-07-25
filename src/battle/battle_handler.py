@@ -16,6 +16,7 @@ from .enemy import Enemy, EnemyAction, EnemyGroup, create_enemy_group, ActionTyp
 from .enemy_renderer import EnemyRenderer
 from .enemy_intent_renderer import EnemyIntentRenderer
 from ..special_puyo.special_puyo import special_puyo_manager
+from ..rewards.reward_system import RewardGenerator, RewardSelectionHandler
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +211,11 @@ class BattleHandler:
         
         # ダメージ計算
         self.chain_damage_multiplier = 1.0
+        
+        # 報酬システム
+        self.reward_generator = RewardGenerator()
+        self.reward_handler = None
+        self.victory_rewards_generated = False
         
         # UI位置 - 敵情報をぷよエリアの右下に配置
         # ぷよエリアの右側、ぷよエリアの下端に合わせる
@@ -448,6 +454,34 @@ class BattleHandler:
         if effect.get('description'):
             logger.info(f"Special effect activated: {effect['description']}")
     
+    def _generate_victory_rewards(self):
+        """勝利時の報酬を生成"""
+        if self.victory_rewards_generated:
+            return
+        
+        # ボス戦かどうかを判定（敵が1体で強力な場合）
+        is_boss = len(self.enemy_group.enemies) == 1 and self.enemy_group.enemies[0].max_hp > 50
+        
+        # 敵のタイプを取得
+        enemy_type = self.enemy_group.enemies[0].enemy_type.value if self.enemy_group.enemies else "normal"
+        
+        # 報酬を生成
+        rewards = self.reward_generator.generate_battle_rewards(
+            floor_level=self.floor_level,
+            enemy_type=enemy_type,
+            is_boss=is_boss
+        )
+        
+        # 報酬選択ハンドラーを初期化
+        self.reward_handler = RewardSelectionHandler(self.engine, rewards)
+        self.victory_rewards_generated = True
+        
+        logger.info(f"Generated {len(rewards)} victory rewards for floor {self.floor_level}")
+    
+    def get_victory_rewards(self):
+        """勝利報酬を取得（外部からアクセス用）"""
+        return self.reward_handler if self.victory_rewards_generated else None
+    
     def _add_damage_number(self, damage: int, color: tuple, target_player: bool = False, position: tuple = None):
         """ダメージ数値を追加"""
         if target_player:
@@ -491,6 +525,8 @@ class BattleHandler:
         elif self.enemy_group.is_all_defeated():
             self.battle_result = "victory"
             self.battle_active = False
+            # 勝利時の報酬を生成
+            self._generate_victory_rewards()
     
     def handle_event(self, event: pygame.event.Event):
         """イベント処理"""
@@ -513,13 +549,13 @@ class BattleHandler:
                 return
             
             elif event.key == pygame.K_RETURN and not self.battle_active:
-                if self.battle_result == "victory":
+                if self.battle_result == "victory" and self.reward_handler:
                     # 勝利時は報酬選択画面へ
-                    from ..rewards.reward_system import create_battle_rewards, RewardSelectionHandler
-                    rewards = create_battle_rewards(self.floor_level, "normal", False)
-                    reward_handler = RewardSelectionHandler(self.engine, rewards)
-                    self.engine.register_state_handler(GameState.REWARD_SELECT, reward_handler)
+                    self.engine.register_state_handler(GameState.REWARD_SELECT, self.reward_handler)
                     self.engine.change_state(GameState.REWARD_SELECT)
+                elif self.battle_result == "victory":
+                    # 報酬がない場合は直接メニューへ
+                    self.engine.change_state(GameState.MENU)
                 else:
                     # 敗北時はリトライ（新しい戦闘）
                     new_battle = BattleHandler(self.engine, self.floor_level)

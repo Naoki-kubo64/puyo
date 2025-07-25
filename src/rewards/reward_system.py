@@ -206,6 +206,7 @@ class RewardGenerator:
             selected_type = random.choice(special_types)
             
             type_names = {
+                # 既存の特殊ぷよ
                 SpecialPuyoType.BOMB: "爆弾ぷよ",
                 SpecialPuyoType.LIGHTNING: "雷ぷよ",
                 SpecialPuyoType.RAINBOW: "虹ぷよ",
@@ -216,6 +217,14 @@ class RewardGenerator:
                 SpecialPuyoType.POISON: "毒ぷよ",
                 SpecialPuyoType.WILD: "ワイルドぷよ",
                 SpecialPuyoType.CHAIN_STARTER: "連鎖開始ぷよ",
+                
+                # 新しい特殊ぷよ
+                SpecialPuyoType.BUFF: "バフぷよ",
+                SpecialPuyoType.TIMED_POISON: "時限毒ぷよ",
+                SpecialPuyoType.CHAIN_EXTEND: "連鎖拡張ぷよ",
+                SpecialPuyoType.ABSORB_SHIELD: "吸収シールドぷよ",
+                SpecialPuyoType.CURSE: "呪いぷよ",
+                SpecialPuyoType.REFLECT: "反射ぷよ",
             }
             
             type_name = type_names.get(selected_type, "特殊ぷよ")
