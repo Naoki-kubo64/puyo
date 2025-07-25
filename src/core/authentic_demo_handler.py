@@ -698,6 +698,10 @@ class AuthenticDemoHandler:
         self.next_pairs_queue: List[Tuple[PuyoType, PuyoType]] = []
         self._generate_initial_next_queue()
         
+        # PuzzleGameHandlerとの互換性のため
+        self.next_pair_colors = None
+        self._update_next_pair_colors()
+        
         # 本家風タイミング制御（最適化）
         self.spawn_timer = 0.0
         self.spawn_interval = 0.35  # チェイン完了を待つための適切な間隔
@@ -730,6 +734,13 @@ class AuthenticDemoHandler:
             self.next_pairs_queue.append((main_type, sub_type))
         logger.debug(f"Generated initial NEXT queue: {[f'{m.name}+{s.name}' for m, s in self.next_pairs_queue]}")
     
+    def _update_next_pair_colors(self):
+        """next_pair_colorsを更新"""
+        if self.next_pairs_queue:
+            self.next_pair_colors = self.next_pairs_queue[0]  # 最初のペアのみ
+        else:
+            self.next_pair_colors = None
+    
     def _get_next_pair_colors(self) -> Tuple[PuyoType, PuyoType]:
         """次のペアの色を取得してキューを更新"""
         if not self.next_pairs_queue:
@@ -745,6 +756,9 @@ class AuthenticDemoHandler:
         
         logger.debug(f"Used NEXT pair: {next_pair[0].name}+{next_pair[1].name}")
         logger.debug(f"Updated queue: {[f'{m.name}+{s.name}' for m, s in self.next_pairs_queue]}")
+        
+        # next_pair_colorsを更新
+        self._update_next_pair_colors()
         
         return next_pair
     
