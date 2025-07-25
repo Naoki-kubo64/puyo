@@ -33,6 +33,9 @@ class Colors:
     ORANGE = (255, 180, 100)
     CYAN = (100, 255, 255)
     
+    # 追加色（ダンジョンマップ用）
+    DARK_RED = (180, 50, 50)
+    
     # UI色
     UI_BACKGROUND = (40, 40, 60)
     UI_BORDER = (100, 100, 120)
@@ -203,6 +206,7 @@ class GameState(Enum):
     BATTLE = "battle"
     REAL_BATTLE = "real_battle"  # 新しい戦闘状態
     REWARD_SELECT = "reward_select"  # 報酬選択画面
+    DUNGEON_MAP = "dungeon_map"  # ダンジョンマップ画面
     CARD_SELECT = "card_select"
     GAME_OVER = "game_over"
     VICTORY = "victory"
