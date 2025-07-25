@@ -89,7 +89,7 @@ class DungeonMap:
         nodes_this_floor = []
         
         if floor == 0:
-            # 開始フロア：戦闘のみ
+            # 1マス目：必ず戦闘のみ
             node_count = 3
             node_types = [NodeType.BATTLE] * node_count
         elif floor == self.total_floors - 1:
@@ -100,14 +100,10 @@ class DungeonMap:
             # 5フロアごとにエリート戦
             node_count = 2
             node_types = [NodeType.ELITE, NodeType.REST]
-        elif floor % 3 == 2:
-            # 3フロアごとに休憩所を含む
-            node_count = random.randint(3, 5)
-            node_types = self._generate_node_types_with_rest(node_count)
         else:
-            # 通常フロア
+            # 通常フロア：新しいルールでノード生成
             node_count = random.randint(3, 6)
-            node_types = self._generate_normal_node_types(node_count)
+            node_types = self._generate_floor_nodes(floor, node_count)
         
         # ノードを配置
         x_positions = self._calculate_x_positions(node_count)
@@ -135,37 +131,119 @@ class DungeonMap:
         self.floor_nodes[floor] = nodes_this_floor
         logger.debug(f"Floor {floor}: {[n.node_type.value for n in nodes_this_floor]}")
     
-    def _generate_node_types_with_rest(self, count: int) -> List[NodeType]:
-        """休憩所を含むノードタイプリストを生成"""
-        types = [NodeType.REST]  # 必ず休憩所を1つ含む
-        
-        remaining = count - 1
-        for _ in range(remaining):
-            choice = random.choices([
-                NodeType.BATTLE,
-                NodeType.TREASURE,
-                NodeType.EVENT,
-                NodeType.SHOP
-            ], weights=[50, 20, 20, 10])[0]
-            types.append(choice)
-        
-        random.shuffle(types)
-        return types
-    
-    def _generate_normal_node_types(self, count: int) -> List[NodeType]:
-        """通常フロアのノードタイプリストを生成"""
+    def _generate_floor_nodes(self, floor: int, count: int) -> List[NodeType]:
+        """新しいルールに基づいてフロアのノードタイプを生成"""
         types = []
         
-        for _ in range(count):
-            choice = random.choices([
-                NodeType.BATTLE,
-                NodeType.TREASURE,
-                NodeType.EVENT,
-                NodeType.SHOP
-            ], weights=[60, 20, 15, 5])[0]
-            types.append(choice)
+        # 基本ノードプール（戦闘・宝箱）
+        base_nodes = [NodeType.BATTLE, NodeType.TREASURE]
+        
+        # ショップと休憩所は3マス目（floor 2）以降に出現可能
+        special_nodes = []
+        if floor >= 2:
+            special_nodes = [NodeType.SHOP, NodeType.REST]
+        
+        # ランダムイベントは1マス目以外（floor 1以降）に出現可能
+        event_nodes = []
+        if floor >= 1:
+            event_nodes = [NodeType.EVENT]
+        
+        # 前フロアの情報を取得してショップ・休憩所の連続配置をチェック
+        prev_special_positions = self._get_recent_special_positions(floor)
+        
+        # このフロアで既に配置された特殊ノード（同フロア内重複防止）
+        floor_special_used = set()
+        
+        for i in range(count):
+            # ノードタイプを決定
+            available_types = base_nodes[:]
+            
+            # ショップ・休憩所の連続配置チェック
+            if special_nodes and floor >= 2:
+                available_special = []
+                for special_type in special_nodes:
+                    # 同フロア内重複チェック
+                    if special_type in floor_special_used:
+                        continue
+                    
+                    # 連続配置チェック
+                    if self._can_place_special_node_type(floor, i, prev_special_positions, special_type):
+                        available_special.append(special_type)
+                
+                available_types.extend(available_special)
+            
+            # ランダムイベント追加（1マス目以外）
+            if event_nodes:
+                available_types.extend(event_nodes)
+            
+            # 重み付き選択
+            weights = self._get_node_weights(available_types)
+            chosen_type = random.choices(available_types, weights=weights)[0]
+            types.append(chosen_type)
+            
+            # ショップ・休憩所が選ばれた場合、記録
+            if chosen_type in [NodeType.SHOP, NodeType.REST]:
+                prev_special_positions[chosen_type] = (floor, i)
+                floor_special_used.add(chosen_type)
         
         return types
+    
+    def _get_recent_special_positions(self, current_floor: int) -> Dict[NodeType, Tuple[int, int]]:
+        """最近のショップ・休憩所の位置を取得"""
+        special_positions = {}
+        
+        # 前2フロア分をチェック
+        for check_floor in range(max(0, current_floor - 2), current_floor):
+            if check_floor in self.floor_nodes:
+                for node in self.floor_nodes[check_floor]:
+                    if node.node_type in [NodeType.SHOP, NodeType.REST]:
+                        # より最近の位置を優先
+                        if (node.node_type not in special_positions or 
+                            check_floor > special_positions[node.node_type][0]):
+                            special_positions[node.node_type] = (check_floor, node.x)
+        
+        return special_positions
+    
+    def _can_place_special_node_type(self, floor: int, position: int, 
+                                    prev_special_positions: Dict[NodeType, Tuple[int, int]], 
+                                    node_type: NodeType) -> bool:
+        """特定のショップ・休憩所タイプを配置可能かチェック"""
+        if node_type not in prev_special_positions:
+            return True
+            
+        prev_floor, prev_pos = prev_special_positions[node_type]
+        floor_diff = floor - prev_floor
+        
+        # 2フロア以内の連続配置を防ぐ
+        if floor_diff <= 2:
+            if floor_diff == 1:
+                # 隣接フロア：同じタイプは配置しない
+                return False
+            elif floor_diff == 2:
+                # 2フロア離れている：X座標の距離をチェック
+                if abs(position - prev_pos) <= 2:
+                    return False
+        
+        return True
+    
+    def _get_node_weights(self, available_types: List[NodeType]) -> List[int]:
+        """ノードタイプの重みを取得"""
+        weights = []
+        for node_type in available_types:
+            if node_type == NodeType.BATTLE:
+                weights.append(50)
+            elif node_type == NodeType.TREASURE:
+                weights.append(25)
+            elif node_type == NodeType.EVENT:
+                weights.append(15)
+            elif node_type == NodeType.SHOP:
+                weights.append(7)
+            elif node_type == NodeType.REST:
+                weights.append(8)
+            else:
+                weights.append(5)
+        
+        return weights
     
     def _calculate_x_positions(self, count: int) -> List[int]:
         """ノードのX座標を計算（0-6の範囲で均等配置）"""
