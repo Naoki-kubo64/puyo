@@ -88,6 +88,11 @@ class PuyoGrid:
         self.current_chain_timer = 0.0
         self.chain_delay_per_group = 0.1  # 塊ごとの遅延時間（高速化：0.1秒）
         
+        # アニメーション用連鎖統計
+        self.animated_chain_level = 0
+        self.animated_total_score = 0
+        self.animated_total_eliminated = 0
+        
         logger.info(f"PuyoGrid initialized: {self.width}x{self.height}")
     
     def clear(self):
@@ -491,6 +496,11 @@ class PuyoGrid:
         self.current_chain_timer = 0.0
         self.last_chain_positions.clear()  # 連鎖位置をクリア
         
+        # アニメーション用連鎖情報をリセット
+        self.animated_chain_level = 0
+        self.animated_total_score = 0
+        self.animated_total_eliminated = 0
+        
         # 最初に重力を適用
         gravity_applied = self.apply_gravity()
         logger.debug(f"Applied gravity: {gravity_applied} puyos moved")
@@ -506,6 +516,7 @@ class PuyoGrid:
         self.chain_queue = chains.copy()
         self.chain_animation_active = True
         self.current_chain_timer = 0.0
+        self.animated_chain_level = 1
         
         logger.info(f"Started animated chain sequence with {len(chains)} groups")
     
@@ -517,6 +528,8 @@ class PuyoGrid:
         # 安全チェック：キューが空なのにアニメーション中の場合は強制終了
         if not self.chain_queue:
             logger.warning("Chain queue empty but animation active - forcing completion")
+            self.last_chain_score = self.animated_total_score
+            self.total_chains += self.animated_chain_level
             self.chain_animation_active = False
             return True
         
@@ -541,6 +554,13 @@ class PuyoGrid:
             # 塊を消去
             eliminated_count = self.eliminate_puyos(chain.eliminated_puyos)
             
+            # アニメーション統計を更新
+            chain_score = self._calculate_chain_level_score([chain], self.animated_chain_level)
+            self.animated_total_score += chain_score
+            self.animated_total_eliminated += eliminated_count
+            
+            logger.debug(f"Chain level {self.animated_chain_level}: +{chain_score} score, +{eliminated_count} eliminated")
+            
             # 重力適用
             gravity_moved = self.apply_gravity()
             logger.debug(f"After elimination: {eliminated_count} eliminated, {gravity_moved} moved by gravity")
@@ -554,12 +574,15 @@ class PuyoGrid:
                 new_chains = self.find_all_chains()
                 if new_chains:
                     # 新しい連鎖レベル
+                    self.animated_chain_level += 1
                     self.chain_queue = new_chains.copy()
-                    logger.info(f"New chain level started with {len(new_chains)} groups")
+                    logger.info(f"New chain level {self.animated_chain_level} started with {len(new_chains)} groups")
                 else:
-                    # 連鎖完了
+                    # 連鎖完了 - last_chain_scoreを設定
+                    self.last_chain_score = self.animated_total_score
+                    self.total_chains += self.animated_chain_level
                     self.chain_animation_active = False
-                    logger.info("Animated chain sequence completed - no more chains")
+                    logger.info(f"Animated chain sequence completed - {self.animated_chain_level} levels, {self.animated_total_score} total score, {self.animated_total_eliminated} eliminated")
                     return True
         
         return False  # アニメーション継続中
@@ -587,6 +610,27 @@ class PuyoGrid:
             return 28.0 + (chain_level - 10) * 4.0
         else:
             return 1.0
+    
+    def _calculate_chain_level_score(self, chains: List, chain_level: int) -> int:
+        """特定の連鎖レベルでのスコアを計算"""
+        if not chains:
+            return 0
+        
+        total_score = 0
+        chain_multiplier = self._calculate_authentic_chain_multiplier(chain_level)
+        
+        for chain in chains:
+            # 各チェインの基本スコア
+            puyo_count = len(chain.eliminated_puyos)
+            base_score = self._calculate_authentic_chain_score(puyo_count, chain.chain_type)
+            
+            # 連鎖レベル倍率を適用
+            chain_score = int(base_score * chain_multiplier)
+            total_score += chain_score
+            
+            logger.debug(f"Chain score: {puyo_count} {chain.chain_type.name} puyos, base={base_score}, level {chain_level} multiplier={chain_multiplier:.1f}, final={chain_score}")
+        
+        return total_score
     
     def is_game_over(self) -> bool:
         """ゲームオーバー判定（本家仕様：スポーン位置でのペア配置不可）"""

@@ -23,9 +23,19 @@ class DungeonMapHandler:
         
         # ダンジョンマップ（新規作成または既存使用）
         if dungeon_map is None:
-            self.dungeon_map = DungeonMap(total_floors=15)
+            # エンジンに保存されているマップがあれば使用、なければ新規作成
+            if hasattr(engine, 'persistent_dungeon_map') and engine.persistent_dungeon_map is not None:
+                self.dungeon_map = engine.persistent_dungeon_map
+                logger.info("Using existing dungeon map from engine")
+            else:
+                self.dungeon_map = DungeonMap(total_floors=15)
+                # エンジンに保存
+                engine.persistent_dungeon_map = self.dungeon_map
+                logger.info("Created new dungeon map and saved to engine")
         else:
             self.dungeon_map = dungeon_map
+            # エンジンに保存
+            engine.persistent_dungeon_map = self.dungeon_map
         
         # レンダラー
         self.map_renderer = MapRenderer(self.dungeon_map)
@@ -33,6 +43,10 @@ class DungeonMapHandler:
         # 状態管理
         self.transition_pending = False
         self.selected_node: Optional[DungeonNode] = None
+        
+        # エンジンに確実に保存
+        self.engine.persistent_dungeon_map = self.dungeon_map
+        logger.info(f"Map handler initialized with {len(self.dungeon_map.nodes)} nodes")
         
         logger.info("DungeonMapHandler initialized")
     
@@ -105,11 +119,9 @@ class DungeonMapHandler:
     
     def _process_node_selection(self, node: DungeonNode):
         """ノード選択処理"""
-        # マップ上でノードを選択済みにマーク
-        success = self.dungeon_map.select_node(node.node_id)
-        if not success:
-            logger.error(f"Failed to select node: {node.node_id}")
-            return
+        # 戦闘前には何も変更しない！
+        # 戦闘ハンドラーに現在選択中のノードを渡すだけ
+        logger.info(f"Selected node for battle: {node.node_id}")
         
         # ノードタイプに応じて遷移
         if node.node_type == NodeType.BATTLE:
@@ -134,13 +146,23 @@ class DungeonMapHandler:
         logger.info(f"Transitioning to battle: {node.enemy_type}")
         self.transition_pending = True
         
-        # 戦闘ハンドラーに敵情報を渡して遷移
-        # TODO: 戦闘状態への遷移実装
-        # self.engine.change_state(GameState.BATTLE, enemy_type=node.enemy_type, floor=node.floor)
+        try:
+            from ..battle.battle_handler import BattleHandler
+            
+            # 戦闘ハンドラーを作成（現在のノード情報を渡す）
+            battle_handler = BattleHandler(self.engine, floor_level=node.floor + 1, current_node=node)
+            
+            # 戦闘状態に変更
+            self.engine.register_state_handler(GameState.REAL_BATTLE, battle_handler)
+            self.engine.change_state(GameState.REAL_BATTLE)
+            
+            logger.info(f"Successfully transitioned to battle on floor {node.floor}")
+            
+        except Exception as e:
+            logger.error(f"Failed to transition to battle: {e}")
+            # エラー時は戦闘シミュレーション
+            logger.info("Battle simulation - returning to map")
         
-        # 現在は仮で2秒後にマップに戻る
-        # 将来的には戦闘システムとの連携で実装
-        logger.info("Battle simulation - returning to map")
         self.transition_pending = False
     
     def _transition_to_boss_battle(self, node: DungeonNode):
@@ -148,9 +170,22 @@ class DungeonMapHandler:
         logger.info(f"Transitioning to boss battle: {node.enemy_type}")
         self.transition_pending = True
         
-        # ボス戦用の特別なパラメータ設定
-        # TODO: ボス戦状態への遷移実装
-        logger.info("Boss battle simulation - returning to map")
+        try:
+            from ..battle.battle_handler import BattleHandler
+            
+            # ボス戦用の戦闘ハンドラーを作成（現在のノード情報を渡す）
+            battle_handler = BattleHandler(self.engine, floor_level=node.floor + 1, current_node=node)
+            
+            # 戦闘状態に変更
+            self.engine.register_state_handler(GameState.REAL_BATTLE, battle_handler)
+            self.engine.change_state(GameState.REAL_BATTLE)
+            
+            logger.info(f"Successfully transitioned to boss battle on floor {node.floor}")
+            
+        except Exception as e:
+            logger.error(f"Failed to transition to boss battle: {e}")
+            logger.info("Boss battle simulation - returning to map")
+        
         self.transition_pending = False
     
     def _transition_to_elite_battle(self, node: DungeonNode):
@@ -158,9 +193,22 @@ class DungeonMapHandler:
         logger.info(f"Transitioning to elite battle: {node.enemy_type}")
         self.transition_pending = True
         
-        # エリート戦用の特別なパラメータ設定
-        # TODO: エリート戦状態への遷移実装
-        logger.info("Elite battle simulation - returning to map")
+        try:
+            from ..battle.battle_handler import BattleHandler
+            
+            # エリート戦用の戦闘ハンドラーを作成（現在のノード情報を渡す）
+            battle_handler = BattleHandler(self.engine, floor_level=node.floor + 1, current_node=node)
+            
+            # 戦闘状態に変更
+            self.engine.register_state_handler(GameState.REAL_BATTLE, battle_handler)
+            self.engine.change_state(GameState.REAL_BATTLE)
+            
+            logger.info(f"Successfully transitioned to elite battle on floor {node.floor}")
+            
+        except Exception as e:
+            logger.error(f"Failed to transition to elite battle: {e}")
+            logger.info("Elite battle simulation - returning to map")
+        
         self.transition_pending = False
     
     def _transition_to_treasure(self, node: DungeonNode):
@@ -206,10 +254,14 @@ class DungeonMapHandler:
     def _initialize_starting_position(self):
         """開始位置を初期化"""
         available_nodes = self.dungeon_map.get_available_nodes()
+        logger.info(f"Starting nodes available: {[n.node_id for n in available_nodes]}")
+        
         if available_nodes:
-            logger.info(f"Starting nodes available: {[n.node_id for n in available_nodes]}")
+            # デバッグ用：最初のノードの接続情報を確認
+            first_node = available_nodes[0]
+            logger.info(f"First node {first_node.node_id} connections: {first_node.connections}")
         else:
-            logger.warning("No starting nodes available")
+            logger.warning("No starting nodes available - this should not happen!")
     
     def _render_transition_overlay(self, surface: pygame.Surface):
         """遷移中のオーバーレイを描画"""

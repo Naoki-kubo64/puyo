@@ -79,10 +79,26 @@ class DungeonMap:
         # 接続を生成
         self._generate_connections()
         
-        # 最初のフロア（フロア0）を選択可能にする
+        # すべてのノードを最初は選択不可にする
+        for node in self.nodes.values():
+            node.available = False
+            node.visited = False
+        
+        # 最初のフロア（フロア0）のノードのみを選択可能にする
         if 0 in self.floor_nodes:
             for node in self.floor_nodes[0]:
                 node.available = True
+                logger.info(f"Initial node made available: {node.node_id}")
+        
+        # 初期状態での利用可能ノードを確認
+        initial_available = [n.node_id for n in self.nodes.values() if n.available]
+        logger.info(f"Initial available nodes: {initial_available}")
+        
+        # デバッグ：全ノードの状態確認
+        for floor in range(min(3, self.total_floors)):
+            floor_nodes = self.get_nodes_by_floor(floor)
+            available_in_floor = [n.node_id for n in floor_nodes if n.available]
+            logger.debug(f"Floor {floor} available nodes: {available_in_floor}")
     
     def _generate_floor(self, floor: int):
         """指定フロアのノードを生成"""
@@ -96,12 +112,8 @@ class DungeonMap:
             # 最終フロア：ボスのみ
             node_count = 1
             node_types = [NodeType.BOSS]
-        elif floor % 5 == 4:
-            # 5フロアごとにエリート戦
-            node_count = 2
-            node_types = [NodeType.ELITE, NodeType.REST]
         else:
-            # 通常フロア：新しいルールでノード生成
+            # 通常フロア：新しいルールでノード生成（エリート戦を含む）
             node_count = random.randint(3, 6)
             node_types = self._generate_floor_nodes(floor, node_count)
         
@@ -148,6 +160,11 @@ class DungeonMap:
         if floor >= 1:
             event_nodes = [NodeType.EVENT]
         
+        # エリート戦は3マス目以降にランダム確率で出現（低確率）
+        elite_nodes = []
+        if floor >= 2:  # 3マス目は floor == 2
+            elite_nodes = [NodeType.ELITE]
+        
         # 前フロアの情報を取得してショップ・休憩所の連続配置をチェック
         prev_special_positions = self._get_recent_special_positions(floor)
         
@@ -175,6 +192,10 @@ class DungeonMap:
             # ランダムイベント追加（1マス目以外）
             if event_nodes:
                 available_types.extend(event_nodes)
+            
+            # エリート戦追加（3マス目以降、低確率）
+            if elite_nodes:
+                available_types.extend(elite_nodes)
             
             # 重み付き選択
             weights = self._get_node_weights(available_types)
@@ -240,6 +261,8 @@ class DungeonMap:
                 weights.append(7)
             elif node_type == NodeType.REST:
                 weights.append(8)
+            elif node_type == NodeType.ELITE:
+                weights.append(3)  # エリート戦は低確率で出現
             else:
                 weights.append(5)
         
@@ -289,6 +312,7 @@ class DungeonMap:
             for current_node in current_floor_nodes:
                 connections = self._find_valid_connections(current_node, next_floor_nodes)
                 current_node.connections = [node.node_id for node in connections]
+                logger.debug(f"Node {current_node.node_id} connects to: {current_node.connections}")
     
     def _find_valid_connections(self, current_node: DungeonNode, 
                               next_floor_nodes: List[DungeonNode]) -> List[DungeonNode]:
@@ -321,6 +345,12 @@ class DungeonMap:
             return False
         
         node = self.nodes[node_id]
+        
+        # 既に訪問済みの場合はスキップ
+        if node.visited:
+            logger.info(f"Node {node_id} already visited, skipping")
+            return True
+        
         if not node.available:
             logger.warning(f"Node {node_id} is not available")
             return False
@@ -338,6 +368,7 @@ class DungeonMap:
         self._update_available_nodes()
         
         logger.info(f"Moved to node: {node_id} (floor {node.floor}, type: {node.node_type.value})")
+        logger.info(f"Available nodes after move: {[n.node_id for n in self.get_available_nodes()]}")
         return True
     
     def _update_available_nodes(self):
@@ -348,11 +379,25 @@ class DungeonMap:
         
         # 現在のノードからの接続先を選択可能にする
         if self.current_node:
+            logger.info(f"Updating available nodes from current: {self.current_node.node_id}")
+            logger.info(f"Current node connections: {self.current_node.connections}")
+            
             for connection_id in self.current_node.connections:
                 if connection_id in self.nodes:
                     connected_node = self.nodes[connection_id]
                     if not connected_node.visited:
                         connected_node.available = True
+                        logger.info(f"Made node {connection_id} available")
+                    else:
+                        logger.info(f"Node {connection_id} already visited, skipping")
+                else:
+                    logger.warning(f"Connection {connection_id} not found in nodes")
+            
+            # 利用可能なノード一覧を出力
+            available = [n.node_id for n in self.nodes.values() if n.available]
+            logger.info(f"Final available nodes: {available}")
+        else:
+            logger.warning("No current_node set, cannot update available nodes")
     
     def get_current_floor_progress(self) -> Tuple[int, int]:
         """現在のフロア進行状況を取得"""

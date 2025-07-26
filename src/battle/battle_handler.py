@@ -191,9 +191,16 @@ class Player:
 class BattleHandler:
     """リアルタイム戦闘ハンドラー"""
     
-    def __init__(self, engine: GameEngine, floor_level: int = 1):
+    def __init__(self, engine: GameEngine, floor_level: int = 1, current_node=None):
         self.engine = engine
         self.floor_level = floor_level
+        self.current_node = current_node  # マップノード情報を保持
+        
+        # current_nodeが設定されていることを確認
+        if self.current_node:
+            logger.info(f"Battle handler initialized for node: {self.current_node.node_id}")
+        else:
+            logger.warning("Battle handler initialized without current_node!")
         
         # プレイヤー
         self.player = Player()
@@ -286,9 +293,12 @@ class BattleHandler:
         # 最後の連鎖スコアが更新されていたらダメージを与える
         last_score = self.puyo_handler.puyo_grid.last_chain_score
         
+        # 常に連鎖スコアをログ出力（デバッグ用）
+        logger.debug(f"Checking chain damage - last_score: {last_score}")
+        
         # デバッグ情報を追加
         if last_score > 0:
-            logger.debug(f"Chain detected! Score: {last_score}")
+            logger.info(f"Chain detected! Score: {last_score}")
         
         if last_score > 0:
             # スコアをダメージに変換
@@ -485,8 +495,8 @@ class BattleHandler:
             is_boss=is_boss
         )
         
-        # 報酬選択ハンドラーを初期化
-        self.reward_handler = RewardSelectionHandler(self.engine, rewards)
+        # 報酬選択ハンドラーを初期化（戦闘ハンドラー情報を渡す）
+        self.reward_handler = RewardSelectionHandler(self.engine, rewards, battle_handler=self)
         self.victory_rewards_generated = True
         
         logger.info(f"Generated {len(rewards)} victory rewards for floor {self.floor_level}")
@@ -494,6 +504,66 @@ class BattleHandler:
     def get_victory_rewards(self):
         """勝利報酬を取得（外部からアクセス用）"""
         return self.reward_handler if self.victory_rewards_generated else None
+    
+    def _return_to_dungeon_map(self):
+        """ダンジョンマップに戻る"""
+        try:
+            from ..dungeon.map_handler import DungeonMapHandler
+            
+            # 戦闘勝利時：マップの進行状態を更新
+            if self.battle_result == "victory" and hasattr(self.engine, 'persistent_dungeon_map') and self.engine.persistent_dungeon_map:
+                dungeon_map = self.engine.persistent_dungeon_map
+                
+                logger.info(f"Battle victory! Current node: {self.current_node.node_id if self.current_node else 'None'}")
+                logger.info(f"Map current node: {dungeon_map.current_node.node_id if dungeon_map.current_node else 'None'}")
+                
+                # 戦闘したノードを選択して次に進む
+                target_node = self.current_node or dungeon_map.current_node
+                
+                if target_node:
+                    logger.info(f"Processing battle victory for node: {target_node.node_id}")
+                    
+                    # select_nodeを使用して正しく進行
+                    success = dungeon_map.select_node(target_node.node_id)
+                    
+                    if success:
+                        available_nodes = dungeon_map.get_available_nodes()
+                        logger.info(f"Battle victory: {target_node.node_id} completed -> Available: {[n.node_id for n in available_nodes]}")
+                        
+                        # デバッグ：次フロアの状態確認
+                        next_floor = target_node.floor + 1
+                        if next_floor < dungeon_map.total_floors:
+                            next_floor_nodes = dungeon_map.get_nodes_by_floor(next_floor)
+                            next_available = [n.node_id for n in next_floor_nodes if n.available]
+                            logger.info(f"Next floor {next_floor} available nodes: {next_available}")
+                    else:
+                        logger.error(f"Failed to select node {target_node.node_id} after battle victory")
+                        
+                else:
+                    logger.warning("No target node found for battle progression!")
+                    # 最初から開始
+                    floor_0_nodes = dungeon_map.get_nodes_by_floor(0)
+                    if floor_0_nodes:
+                        first_node = floor_0_nodes[0]
+                        success = dungeon_map.select_node(first_node.node_id)
+                        if success:
+                            logger.info(f"Reset to initial position: {first_node.node_id}")
+                        
+                logger.info("Map progression updated after battle victory")
+            
+            # ダンジョンマップハンドラーを作成（既存のマップ状態を使用）
+            map_handler = DungeonMapHandler(self.engine)
+            
+            # ダンジョンマップ状態に変更
+            self.engine.register_state_handler(GameState.DUNGEON_MAP, map_handler)
+            self.engine.change_state(GameState.DUNGEON_MAP)
+            
+            logger.info("Returned to dungeon map after battle")
+            
+        except Exception as e:
+            logger.error(f"Failed to return to dungeon map: {e}")
+            # フォールバック: メニューに戻る
+            self.engine.change_state(GameState.MENU)
     
     def _add_damage_number(self, damage: int, color: tuple, target_player: bool = False, position: tuple = None):
         """ダメージ数値を追加"""
@@ -567,8 +637,8 @@ class BattleHandler:
                     self.engine.register_state_handler(GameState.REWARD_SELECT, self.reward_handler)
                     self.engine.change_state(GameState.REWARD_SELECT)
                 elif self.battle_result == "victory":
-                    # 報酬がない場合は直接メニューへ
-                    self.engine.change_state(GameState.MENU)
+                    # 報酬がない場合は直接ダンジョンマップへ
+                    self._return_to_dungeon_map()
                 else:
                     # 敗北時はリトライ（新しい戦闘）
                     new_battle = BattleHandler(self.engine, self.floor_level)

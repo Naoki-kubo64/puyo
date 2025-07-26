@@ -90,6 +90,9 @@ class GameEngine:
         self.state_handlers = {}
         self.state_systems = {}
         
+        # 永続データ
+        self.persistent_dungeon_map = None  # ダンジョンマップの状態を保持
+        
         # デバッグ情報
         self.debug_mode = DEBUG_MODE
         self.show_fps = SHOW_FPS

@@ -243,12 +243,13 @@ class RewardGenerator:
 class RewardSelectionHandler:
     """報酬選択画面ハンドラー"""
     
-    def __init__(self, engine, rewards: List[Reward]):
+    def __init__(self, engine, rewards: List[Reward], battle_handler=None):
         self.engine = engine
         self.rewards = rewards
         self.selected_index = 0
         self.selection_made = False
         self.selected_reward = None
+        self.battle_handler = battle_handler  # 戦闘ハンドラーの参照を保存
         
         # レイアウト設定
         self.reward_width = 200
@@ -269,9 +270,9 @@ class RewardSelectionHandler:
     def handle_event(self, event: pygame.event.Event):
         """イベント処理"""
         if self.selection_made:
-            # 選択完了後はメニューに戻る
+            # 選択完了後はダンジョンマップに戻る
             if event.type == pygame.KEYDOWN and (event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE):
-                self.engine.change_state(GameState.MENU)
+                self._return_to_dungeon_map()
             return
         
         if event.type == pygame.KEYDOWN:
@@ -294,6 +295,44 @@ class RewardSelectionHandler:
             self.selected_reward = self.rewards[self.selected_index]
             self.selection_made = True
             logger.info(f"Selected reward: {self.selected_reward.name}")
+    
+    def _return_to_dungeon_map(self):
+        """ダンジョンマップに戻る"""
+        try:
+            from ..dungeon.map_handler import DungeonMapHandler
+            
+            # 報酬選択完了時：戦闘勝利によるマップ進行処理を実行
+            if (hasattr(self.engine, 'persistent_dungeon_map') and self.engine.persistent_dungeon_map and 
+                self.battle_handler and hasattr(self.battle_handler, 'current_node') and self.battle_handler.current_node):
+                
+                dungeon_map = self.engine.persistent_dungeon_map
+                current_node = self.battle_handler.current_node
+                
+                logger.info(f"Processing map progression after reward selection for node: {current_node.node_id}")
+                
+                # ノードを選択して次の階層を解放
+                success = dungeon_map.select_node(current_node.node_id)
+                if success:
+                    available_nodes = dungeon_map.get_available_nodes()
+                    logger.info(f"Map progression completed: {current_node.node_id} -> Available: {[n.node_id for n in available_nodes]}")
+                else:
+                    logger.error(f"Failed to progress map for node: {current_node.node_id}")
+            else:
+                logger.warning("Cannot process map progression - missing battle handler or current node")
+            
+            # ダンジョンマップハンドラーを作成（既存のマップ状態を使用）
+            map_handler = DungeonMapHandler(self.engine)
+            
+            # ダンジョンマップ状態に変更
+            self.engine.register_state_handler(GameState.DUNGEON_MAP, map_handler)
+            self.engine.change_state(GameState.DUNGEON_MAP)
+            
+            logger.info("Returned to dungeon map after reward selection")
+            
+        except Exception as e:
+            logger.error(f"Failed to return to dungeon map: {e}")
+            # フォールバック: メニューに戻る
+            self.engine.change_state(GameState.MENU)
     
     def render(self, surface: pygame.Surface):
         """描画処理"""
