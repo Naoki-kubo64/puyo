@@ -157,15 +157,24 @@ class MapRenderer:
                 
                 end_pos = self._get_node_position(connected_node)
                 
-                # 線の色を決定
+                # 線の色を決定（接続タイプに応じて）
+                x_diff = abs(node.x - connected_node.x)
+                
                 if node.visited and connected_node.available:
-                    color = Colors.YELLOW  # 選択可能な経路
-                    width = 3
+                    # 選択可能な経路
+                    if x_diff == 0:
+                        color = Colors.YELLOW  # 真っ直ぐの経路（黄色）
+                        width = 4
+                    else:
+                        color = (255, 165, 0)  # 分岐経路（オレンジ）
+                        width = 3
                 elif node.visited:
-                    color = Colors.LIGHT_GRAY  # 訪問済み
+                    # 訪問済み
+                    color = Colors.LIGHT_GRAY  
                     width = 2
                 else:
-                    color = Colors.GRAY  # 未訪問
+                    # 未訪問
+                    color = Colors.GRAY  
                     width = 1
                 
                 pygame.draw.line(surface, color, start_pos, end_pos, width)

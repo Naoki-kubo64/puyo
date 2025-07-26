@@ -301,6 +301,9 @@ class DungeonMap:
     
     def _generate_connections(self):
         """フロア間の接続を生成"""
+        # 分岐の追跡（連続分岐を制限するため）
+        recent_branches = set()
+        
         for floor in range(self.total_floors - 1):
             current_floor_nodes = self.floor_nodes.get(floor, [])
             next_floor_nodes = self.floor_nodes.get(floor + 1, [])
@@ -310,27 +313,68 @@ class DungeonMap:
             
             # 各ノードから次フロアのノードへの接続を生成
             for current_node in current_floor_nodes:
-                connections = self._find_valid_connections(current_node, next_floor_nodes)
+                # 前フロアで分岐があった位置を考慮
+                has_recent_branch = any(abs(current_node.x - branch_x) <= 1 
+                                      for branch_x in recent_branches)
+                
+                connections = self._find_valid_connections(
+                    current_node, next_floor_nodes, 
+                    reduce_branch_chance=has_recent_branch
+                )
                 current_node.connections = [node.node_id for node in connections]
                 logger.debug(f"Node {current_node.node_id} connects to: {current_node.connections}")
+                
+                # 分岐があった場合は追跡
+                if len(connections) > 1:
+                    recent_branches.add(current_node.x)
+            
+            # 2フロア前の分岐情報は削除（影響範囲を制限）
+            if floor >= 2:
+                recent_branches.clear()
     
     def _find_valid_connections(self, current_node: DungeonNode, 
-                              next_floor_nodes: List[DungeonNode]) -> List[DungeonNode]:
-        """現在ノードから次フロアへの有効な接続を検索"""
+                              next_floor_nodes: List[DungeonNode],
+                              reduce_branch_chance: bool = False) -> List[DungeonNode]:
+        """Slay the Spire風の接続を生成：基本は真っ直ぐ、たまに分岐"""
+        import random
+        
         valid_connections = []
+        current_x = current_node.x
+        
+        # 基本接続：同じX座標または隣接する位置
+        primary_targets = []
+        secondary_targets = []
         
         for next_node in next_floor_nodes:
-            # X座標の差が3以下なら接続可能
             x_diff = abs(current_node.x - next_node.x)
-            if x_diff <= 3:
-                valid_connections.append(next_node)
+            
+            if x_diff == 0:
+                # 真っ直ぐ進む（最優先）
+                primary_targets.append(next_node)
+            elif x_diff == 1:
+                # 隣接位置（分岐候補）
+                secondary_targets.append(next_node)
         
-        # 最低1つは接続を保証
-        if not valid_connections and next_floor_nodes:
-            # 最も近いノードに接続
+        # 基本接続：真っ直ぐ進む
+        if primary_targets:
+            valid_connections.extend(primary_targets)
+            logger.debug(f"Node {current_node.node_id} connects straight to: {[n.node_id for n in primary_targets]}")
+        
+        # 分岐の確率的追加（連続分岐を制限）
+        branch_chance = 0.15 if reduce_branch_chance else 0.3
+        if secondary_targets and random.random() < branch_chance:
+            # 分岐は最大1つまで
+            branch_target = random.choice(secondary_targets)
+            valid_connections.append(branch_target)
+            logger.debug(f"Node {current_node.node_id} has branch to: {branch_target.node_id}")
+        
+        # 接続がない場合の保証処理
+        if not valid_connections:
+            # 最も近いノードに強制接続
             closest_node = min(next_floor_nodes, 
                              key=lambda n: abs(n.x - current_node.x))
             valid_connections = [closest_node]
+            logger.debug(f"Node {current_node.node_id} forced connection to: {closest_node.node_id}")
         
         return valid_connections
     
