@@ -48,6 +48,9 @@ class DungeonMapHandler:
         self.engine.persistent_dungeon_map = self.dungeon_map
         logger.info(f"Map handler initialized with {len(self.dungeon_map.nodes)} nodes")
         
+        # 現在の進行に応じて適切な位置にスクロール
+        self._auto_scroll_to_current_position()
+        
         logger.info("DungeonMapHandler initialized")
     
     def on_enter(self, previous_state):
@@ -75,14 +78,56 @@ class DungeonMapHandler:
             if event.key == pygame.K_ESCAPE:
                 # メインメニューに戻る
                 self.engine.change_state(GameState.MENU)
+            elif event.key == pygame.K_UP:
+                # 上スクロール
+                self._scroll(-30)
+            elif event.key == pygame.K_DOWN:
+                # 下スクロール
+                self._scroll(30)
         
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:  # 左クリック
                 self._handle_left_click(event.pos)
+            elif event.button == 4:  # マウスホイール上
+                self._scroll(-30)
+            elif event.button == 5:  # マウスホイール下
+                self._scroll(30)
         
         elif event.type == pygame.MOUSEMOTION:
             # マウスホバー処理
             self.map_renderer.handle_mouse_motion(event.pos)
+    
+    def _scroll(self, delta_y: int):
+        """マップをスクロール"""
+        old_scroll = self.map_renderer.scroll_y
+        new_scroll = max(0, min(self.map_renderer.max_scroll_y, old_scroll + delta_y))
+        self.map_renderer.scroll_y = new_scroll
+        
+        if new_scroll != old_scroll:
+            logger.debug(f"Scrolled: {old_scroll} -> {new_scroll}")
+    
+    def _auto_scroll_to_current_position(self):
+        """現在の進行状況に基づいて適切な位置にスクロール"""
+        if self.dungeon_map.current_node:
+            # 現在のノードが見える位置にスクロール
+            current_floor = self.dungeon_map.current_node.floor
+        else:
+            # 利用可能なノードの最も進んだフロアにスクロール
+            available_nodes = self.dungeon_map.get_available_nodes()
+            if available_nodes:
+                current_floor = max(node.floor for node in available_nodes)
+            else:
+                current_floor = 0
+        
+        # 目標Y位置を計算
+        target_y = self.map_renderer.map_area_y + (current_floor + 1) * self.map_renderer.node_spacing_y
+        
+        # スクロール位置を調整（ノードが中央付近に来るように）
+        scroll_target = target_y - self.map_renderer.map_area_height // 2
+        scroll_target = max(0, min(self.map_renderer.max_scroll_y, scroll_target))
+        
+        self.map_renderer.scroll_y = scroll_target
+        logger.debug(f"Auto-scrolled to floor {current_floor}, scroll_y: {scroll_target}")
     
     def render(self, surface: pygame.Surface):
         """描画処理"""

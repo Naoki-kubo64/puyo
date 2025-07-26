@@ -197,8 +197,8 @@ class DungeonMap:
             if elite_nodes:
                 available_types.extend(elite_nodes)
             
-            # 重み付き選択
-            weights = self._get_node_weights(available_types)
+            # 重み付き選択（フロア情報を渡す）
+            weights = self._get_node_weights(available_types, floor)
             chosen_type = random.choices(available_types, weights=weights)[0]
             types.append(chosen_type)
             
@@ -247,9 +247,21 @@ class DungeonMap:
         
         return True
     
-    def _get_node_weights(self, available_types: List[NodeType]) -> List[int]:
-        """ノードタイプの重みを取得"""
+    def _get_node_weights(self, available_types: List[NodeType], floor: int = 0) -> List[int]:
+        """ノードタイプの重みを取得（フロアに応じて動的調整）"""
         weights = []
+        
+        # 後半フロアでエリートの出現率を段階的に上げる
+        elite_base_weight = 8
+        if floor >= 10:  # 11フロア目以降
+            elite_weight = elite_base_weight + 6  # 14
+        elif floor >= 7:   # 8フロア目以降
+            elite_weight = elite_base_weight + 4  # 12
+        elif floor >= 4:   # 5フロア目以降
+            elite_weight = elite_base_weight + 2  # 10
+        else:
+            elite_weight = elite_base_weight  # 8
+        
         for node_type in available_types:
             if node_type == NodeType.BATTLE:
                 weights.append(50)
@@ -262,7 +274,7 @@ class DungeonMap:
             elif node_type == NodeType.REST:
                 weights.append(8)
             elif node_type == NodeType.ELITE:
-                weights.append(3)  # エリート戦は低確率で出現
+                weights.append(elite_weight)  # フロアに応じて動的に調整
             else:
                 weights.append(5)
         
