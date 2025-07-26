@@ -300,10 +300,7 @@ class DungeonMap:
             return random.choice(enemy_pool)
     
     def _generate_connections(self):
-        """フロア間の接続を生成"""
-        # 分岐の追跡（連続分岐を制限するため）
-        recent_branches = set()
-        
+        """Slay the Spire風の接続を生成：すべてのノードが到達可能"""
         for floor in range(self.total_floors - 1):
             current_floor_nodes = self.floor_nodes.get(floor, [])
             next_floor_nodes = self.floor_nodes.get(floor + 1, [])
@@ -311,26 +308,21 @@ class DungeonMap:
             if not current_floor_nodes or not next_floor_nodes:
                 continue
             
-            # 各ノードから次フロアのノードへの接続を生成
-            for current_node in current_floor_nodes:
-                # 前フロアで分岐があった位置を考慮
-                has_recent_branch = any(abs(current_node.x - branch_x) <= 1 
-                                      for branch_x in recent_branches)
-                
-                connections = self._find_valid_connections(
-                    current_node, next_floor_nodes, 
-                    reduce_branch_chance=has_recent_branch
-                )
-                current_node.connections = [node.node_id for node in connections]
-                logger.debug(f"Node {current_node.node_id} connects to: {current_node.connections}")
-                
-                # 分岐があった場合は追跡
-                if len(connections) > 1:
-                    recent_branches.add(current_node.x)
+            # ステップ1: 各ノードに基本的な接続を保証
+            self._ensure_basic_connections(current_floor_nodes, next_floor_nodes)
             
-            # 2フロア前の分岐情報は削除（影響範囲を制限）
-            if floor >= 2:
-                recent_branches.clear()
+            # ステップ2: 逆方向から到達可能性を確認し、孤立ノードを修正
+            self._fix_isolated_nodes(current_floor_nodes, next_floor_nodes)
+            
+            # ステップ3: 分岐を適度に追加（ただし複雑にしすぎない）
+            self._add_strategic_branches(current_floor_nodes, next_floor_nodes)
+            
+            # デバッグ情報
+            for node in current_floor_nodes:
+                logger.debug(f"Node {node.node_id} connects to: {node.connections}")
+        
+        # 最終確認：全ノードの到達可能性を検証
+        self._verify_all_nodes_reachable()
     
     def _find_valid_connections(self, current_node: DungeonNode, 
                               next_floor_nodes: List[DungeonNode],
@@ -377,6 +369,106 @@ class DungeonMap:
             logger.debug(f"Node {current_node.node_id} forced connection to: {closest_node.node_id}")
         
         return valid_connections
+    
+    def _ensure_basic_connections(self, current_floor_nodes, next_floor_nodes):
+        """各ノードに基本的な接続を保証"""
+        for current_node in current_floor_nodes:
+            current_node.connections = []
+            
+            # 最も近いノードに接続（真っ直ぐ優先）
+            best_targets = []
+            min_distance = float('inf')
+            
+            for next_node in next_floor_nodes:
+                distance = abs(current_node.x - next_node.x)
+                if distance < min_distance:
+                    min_distance = distance
+                    best_targets = [next_node]
+                elif distance == min_distance:
+                    best_targets.append(next_node)
+            
+            # 最良の接続先を選択
+            if best_targets:
+                # 真っ直ぐ進む場合は全て接続、そうでなければ1つだけ
+                if min_distance == 0:
+                    for target in best_targets:
+                        current_node.connections.append(target.node_id)
+                else:
+                    # 斜めの場合は1つだけ選択
+                    import random
+                    chosen = random.choice(best_targets)
+                    current_node.connections.append(chosen.node_id)
+    
+    def _fix_isolated_nodes(self, current_floor_nodes, next_floor_nodes):
+        """孤立ノードを修正"""
+        # 次フロアの各ノードに到達する経路があるかチェック
+        reachable_next_nodes = set()
+        for current_node in current_floor_nodes:
+            for connection_id in current_node.connections:
+                reachable_next_nodes.add(connection_id)
+        
+        # 到達できないノードがある場合、最寄りの現在フロアノードから接続
+        for next_node in next_floor_nodes:
+            if next_node.node_id not in reachable_next_nodes:
+                # 最も近い現在フロアのノードを見つけて接続
+                closest_current = min(current_floor_nodes, 
+                                    key=lambda n: abs(n.x - next_node.x))
+                if next_node.node_id not in closest_current.connections:
+                    closest_current.connections.append(next_node.node_id)
+                    logger.info(f"Fixed isolation: {closest_current.node_id} -> {next_node.node_id}")
+    
+    def _add_strategic_branches(self, current_floor_nodes, next_floor_nodes):
+        """戦略的な分岐を適度に追加"""
+        import random
+        
+        for current_node in current_floor_nodes:
+            # 既に複数の接続がある場合はスキップ
+            if len(current_node.connections) > 1:
+                continue
+            
+            # 20%の確率で分岐を追加
+            if random.random() < 0.2:
+                # 隣接するノードで、まだ接続していないものを探す
+                for next_node in next_floor_nodes:
+                    if (next_node.node_id not in current_node.connections and
+                        abs(current_node.x - next_node.x) == 1):
+                        current_node.connections.append(next_node.node_id)
+                        logger.debug(f"Added branch: {current_node.node_id} -> {next_node.node_id}")
+                        break  # 1つだけ追加
+    
+    def _verify_all_nodes_reachable(self):
+        """全ノードが到達可能かを検証"""
+        # フロア0から開始して到達可能なノードを追跡
+        reachable = set()
+        
+        # 最初のフロアのノードは全て到達可能
+        if 0 in self.floor_nodes:
+            for node in self.floor_nodes[0]:
+                reachable.add(node.node_id)
+        
+        # 各フロアを順番に処理
+        for floor in range(self.total_floors - 1):
+            if floor not in self.floor_nodes:
+                continue
+                
+            for current_node in self.floor_nodes[floor]:
+                if current_node.node_id in reachable:
+                    # このノードから接続先も到達可能になる
+                    for connection_id in current_node.connections:
+                        reachable.add(connection_id)
+        
+        # 到達不可能なノードをレポート
+        total_nodes = len(self.nodes)
+        reachable_count = len(reachable)
+        
+        if reachable_count < total_nodes:
+            unreachable = []
+            for node_id, node in self.nodes.items():
+                if node_id not in reachable:
+                    unreachable.append(node_id)
+            logger.warning(f"Unreachable nodes detected: {unreachable}")
+        else:
+            logger.info(f"All {total_nodes} nodes are reachable")
     
     def get_available_nodes(self) -> List[DungeonNode]:
         """現在選択可能なノードを取得"""

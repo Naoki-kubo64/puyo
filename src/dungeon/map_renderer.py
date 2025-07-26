@@ -161,22 +161,30 @@ class MapRenderer:
                 x_diff = abs(node.x - connected_node.x)
                 
                 if node.visited and connected_node.available:
-                    # 選択可能な経路
+                    # 選択可能な経路 - より目立つ効果
                     if x_diff == 0:
-                        color = Colors.YELLOW  # 真っ直ぐの経路（黄色）
-                        width = 4
+                        color = (255, 255, 100)  # 明るい黄色（真っ直ぐ）
+                        width = 5
+                        # グロウ効果
+                        glow_color = (255, 255, 150, 128)
                     else:
-                        color = (255, 165, 0)  # 分岐経路（オレンジ）
-                        width = 3
+                        color = (255, 165, 0)  # オレンジ（分岐）
+                        width = 4
+                        glow_color = (255, 200, 100, 128)
+                    
+                    # グロウ効果のための太い線を先に描画
+                    pygame.draw.line(surface, glow_color[:3], start_pos, end_pos, width + 2)
+                    
                 elif node.visited:
                     # 訪問済み
-                    color = Colors.LIGHT_GRAY  
+                    color = (150, 150, 150)  
                     width = 2
                 else:
-                    # 未訪問
-                    color = Colors.GRAY  
+                    # 未訪問 - より薄く
+                    color = (80, 80, 90)  
                     width = 1
                 
+                # メイン線を描画
                 pygame.draw.line(surface, color, start_pos, end_pos, width)
     
     def _render_nodes(self, surface: pygame.Surface, fonts: Dict[str, pygame.font.Font]):
