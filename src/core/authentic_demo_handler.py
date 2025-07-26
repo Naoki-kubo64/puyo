@@ -34,9 +34,9 @@ class PuyoPair:
         
         # 動作状態（本家風タイミング）
         self.active = True
-        self.fall_speed = 1.0  # セル/秒（本家に近い速度）
+        self.fall_speed = 0.4  # セル/秒（本家の通常落下速度）
         self.fast_falling = False
-        self.fast_fall_speed = 15.0  # 本家風高速落下（かなり速いが段階的）
+        self.fast_fall_speed = 15.0  # 本家風高速落下（高速）
         
         # 分離状態（片方が着地した場合）
         self.main_fixed = False  # 軸ぷよが固定されたか
@@ -84,7 +84,8 @@ class PuyoPair:
         rotation = test_rotation if test_rotation is not None else self.rotation
         
         # 浮動小数点の位置を厳密にチェック（重なり防止のため）
-        main_x, main_y = int(round(center_x)), int(round(center_y))
+        # 微細な浮動小数点誤差を排除するための厳密な丸め処理
+        main_x, main_y = int(round(center_x + 1e-10)), int(round(center_y + 1e-10))
         
         # 回転オフセット
         offsets = [(0, -1), (1, 0), (0, 1), (-1, 0)]
@@ -412,10 +413,10 @@ class PuyoPair:
         
         # 落下処理（最適化：段階的移動で重複防止）
         if self.fast_falling:
-            # 高速落下：大きなステップサイズで効率的な移動
-            self._perform_safe_fall(grid, old_y, target_y, step_size=0.2)
+            # 高速落下：適度なステップサイズで安全かつスムーズな移動
+            self._perform_safe_fall(grid, old_y, target_y, step_size=0.1)
         else:
-            # 通常落下：適度なステップサイズで滑らかな移動
+            # 通常落下：小さなステップサイズで精密な制御
             self._perform_safe_fall(grid, old_y, target_y, step_size=0.05)
         
         # 着地判定
@@ -630,12 +631,30 @@ class PuyoPair:
         if y < 0 or x < 0 or x >= GRID_WIDTH:
             return
         
-        # 浮動小数点座標での滑らかな描画
-        actual_x = self.center_x if is_main else self.center_x + [0, 1, 0, -1][self.rotation]
-        actual_y = self.center_y if is_main else self.center_y + [-1, 0, 1, 0][self.rotation]
+        # 重なり防止のため、描画位置を整数グリッドにスナップ
+        grid_x = int(round(self.center_x + 1e-10))
+        grid_y = int(round(self.center_y + 1e-10))
+        
+        if is_main:
+            actual_x, actual_y = grid_x, grid_y
+        else:
+            offset_x, offset_y = [0, 1, 0, -1][self.rotation], [-1, 0, 1, 0][self.rotation]
+            actual_x, actual_y = grid_x + offset_x, grid_y + offset_y
+        
+        # 既存のぷよとの重なりチェック（視覚的重なり防止）
+        # ただし、落下中のぷよは少し上にオフセットして描画することで重なりを回避
+        if actual_y >= 0 and actual_x >= 0 and actual_x < GRID_WIDTH and actual_y < GRID_HEIGHT:
+            if not grid.can_place_puyo(actual_x, actual_y):
+                # 既存のぷよがある場合は、少し上の位置に描画してオーバーラップを防ぐ
+                pixel_y_offset = -6  # 6ピクセル上にオフセット（より明確な分離）
+                logger.debug(f"Offsetting render position to prevent visual overlap at ({actual_x}, {actual_y})")
+            else:
+                pixel_y_offset = 0
+        else:
+            pixel_y_offset = 0
         
         pixel_x = grid.offset_x + actual_x * grid.puyo_size
-        pixel_y = grid.offset_y + actual_y * grid.puyo_size
+        pixel_y = grid.offset_y + actual_y * grid.puyo_size + pixel_y_offset
         
         rect = pygame.Rect(
             int(pixel_x) + 2,
@@ -679,6 +698,10 @@ class AuthenticDemoHandler:
         self.next_pairs_queue: List[Tuple[PuyoType, PuyoType]] = []
         self._generate_initial_next_queue()
         
+        # PuzzleGameHandlerとの互換性のため
+        self.next_pair_colors = None
+        self._update_next_pair_colors()
+        
         # 本家風タイミング制御（最適化）
         self.spawn_timer = 0.0
         self.spawn_interval = 0.35  # チェイン完了を待つための適切な間隔
@@ -711,6 +734,13 @@ class AuthenticDemoHandler:
             self.next_pairs_queue.append((main_type, sub_type))
         logger.debug(f"Generated initial NEXT queue: {[f'{m.name}+{s.name}' for m, s in self.next_pairs_queue]}")
     
+    def _update_next_pair_colors(self):
+        """next_pair_colorsを更新"""
+        if self.next_pairs_queue:
+            self.next_pair_colors = self.next_pairs_queue[0]  # 最初のペアのみ
+        else:
+            self.next_pair_colors = None
+    
     def _get_next_pair_colors(self) -> Tuple[PuyoType, PuyoType]:
         """次のペアの色を取得してキューを更新"""
         if not self.next_pairs_queue:
@@ -726,6 +756,9 @@ class AuthenticDemoHandler:
         
         logger.debug(f"Used NEXT pair: {next_pair[0].name}+{next_pair[1].name}")
         logger.debug(f"Updated queue: {[f'{m.name}+{s.name}' for m, s in self.next_pairs_queue]}")
+        
+        # next_pair_colorsを更新
+        self._update_next_pair_colors()
         
         return next_pair
     
@@ -1110,8 +1143,8 @@ class AuthenticDemoHandler:
         title_rect = next_title.get_rect(centerx=next_area_x + next_area_width // 2, y=next_area_y + 5)
         surface.blit(next_title, title_rect)
         
-        # 3ペア分のNEXTぷよを描画
-        for i, (main_type, sub_type) in enumerate(self.next_pairs_queue):
+        # 2ペア分のNEXTぷよを描画
+        for i, (main_type, sub_type) in enumerate(self.next_pairs_queue[:2]):
             # 各ペアのサイズと位置
             if i == 0:  # 最初のペア（最も近い）
                 puyo_size = 25
@@ -1155,9 +1188,9 @@ class AuthenticDemoHandler:
                 sub_highlight_center = (sub_center[0] - sub_radius//3, sub_center[1] - sub_radius//3)
                 pygame.draw.circle(surface, Colors.WHITE, sub_highlight_center, highlight_radius)
             
-            # ペア番号表示（2番目、3番目）
+            # ペア番号表示（2番目のみ）
             if i > 0:
-                number_text = font_small.render(str(i + 1), True, Colors.LIGHT_GRAY)
+                number_text = font_small.render("2", True, Colors.LIGHT_GRAY)
                 number_rect = number_text.get_rect(centerx=next_area_x + 15, centery=center_y - puyo_size // 2)
                 surface.blit(number_text, number_rect)
     

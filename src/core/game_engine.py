@@ -90,6 +90,9 @@ class GameEngine:
         self.state_handlers = {}
         self.state_systems = {}
         
+        # 永続データ
+        self.persistent_dungeon_map = None  # ダンジョンマップの状態を保持
+        
         # デバッグ情報
         self.debug_mode = DEBUG_MODE
         self.show_fps = SHOW_FPS
@@ -110,9 +113,11 @@ class GameEngine:
             
             japanese_font = None
             
-            # Windows環境での日本語フォント読み込み
+            # Windows環境での日本語・絵文字対応フォント読み込み
             if platform.system() == "Windows":
                 windows_font_paths = [
+                    "C:/Windows/Fonts/seguiemj.ttf",  # 絵文字対応フォント（優先）
+                    "C:/Windows/Fonts/NotoColorEmoji.ttf",  # Google絵文字フォント
                     "C:/Windows/Fonts/msgothic.ttc",
                     "C:/Windows/Fonts/msmincho.ttc", 
                     "C:/Windows/Fonts/YuGothM.ttc",
@@ -123,11 +128,13 @@ class GameEngine:
                     if os.path.exists(font_path):
                         try:
                             test_font = pygame.font.Font(font_path, FONT_SIZE_MEDIUM)
-                            # 日本語テスト
-                            test_surface = test_font.render("ゴブリン", True, (255, 255, 255))
-                            if test_surface and test_surface.get_width() > 0:
+                            # 日本語と絵文字テスト
+                            test_japanese = test_font.render("ゴブリン", True, (255, 255, 255))
+                            test_emoji = test_font.render("⚔️", True, (255, 255, 255))
+                            if ((test_japanese and test_japanese.get_width() > 0) or 
+                                (test_emoji and test_emoji.get_width() > 0)):
                                 japanese_font = test_font
-                                logger.info(f"Successfully loaded Japanese font from: {font_path}")
+                                logger.info(f"Successfully loaded font (Japanese/Emoji) from: {font_path}")
                                 break
                         except Exception as e:
                             logger.debug(f"Failed to load font from {font_path}: {e}")
@@ -136,6 +143,8 @@ class GameEngine:
             # システムフォントでの試行（フォールバック）
             if not japanese_font:
                 japanese_font_names = [
+                    'Segoe UI Emoji',     # Windows絵文字フォント
+                    'Noto Color Emoji',   # Google絵文字フォント
                     'MS Gothic',
                     'MS UI Gothic', 
                     'Yu Gothic',
@@ -147,11 +156,13 @@ class GameEngine:
                 for font_name in japanese_font_names:
                     try:
                         test_font = pygame.font.SysFont(font_name, FONT_SIZE_MEDIUM)
-                        # 日本語テスト
-                        test_surface = test_font.render("ゴブリン", True, (255, 255, 255))
-                        if test_surface and test_surface.get_width() > 0:
+                        # 日本語と絵文字テスト
+                        test_japanese = test_font.render("ゴブリン", True, (255, 255, 255))
+                        test_emoji = test_font.render("⚔️", True, (255, 255, 255))
+                        if ((test_japanese and test_japanese.get_width() > 0) or 
+                            (test_emoji and test_emoji.get_width() > 0)):
                             japanese_font = test_font
-                            logger.info(f"Successfully loaded Japanese system font: {font_name}")
+                            logger.info(f"Successfully loaded system font (Japanese/Emoji): {font_name}")
                             break
                     except Exception as e:
                         logger.debug(f"Failed to load system font {font_name}: {e}")

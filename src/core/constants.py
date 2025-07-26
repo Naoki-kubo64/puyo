@@ -33,6 +33,9 @@ class Colors:
     ORANGE = (255, 180, 100)
     CYAN = (100, 255, 255)
     
+    # 追加色（ダンジョンマップ用）
+    DARK_RED = (180, 50, 50)
+    
     # UI色
     UI_BACKGROUND = (40, 40, 60)
     UI_BORDER = (100, 100, 120)
@@ -83,7 +86,7 @@ FAST_FALL_SPEED = 0.05  # より高速に
 
 # 連鎖設定
 MIN_CHAIN_LENGTH = 4  # 連鎖に必要な最小個数
-CHAIN_SCORE_BASE = 100  # 基本スコア
+CHAIN_SCORE_BASE = 10   # 基本スコア（ダメージ計算用、10分の1に削減）
 CHAIN_MULTIPLIER = 1.5  # 連鎖倍率
 
 # ============================================================================
@@ -95,13 +98,18 @@ PLAYER_MAX_HP = 100
 PLAYER_INITIAL_HP = 100
 
 # 敵初期値
-ENEMY_BASE_HP = 50
-ENEMY_ATTACK_DAMAGE = 15
-ENEMY_ATTACK_INTERVAL = 3.0  # 秒
+ENEMY_BASE_HP = 20  # 初期敵HP（ダンジョン進行で強化される前提）
+ENEMY_ATTACK_DAMAGE = 8   # 初期敵攻撃力（ダンジョン進行で強化される前提）
+ENEMY_ATTACK_INTERVAL = 6.0  # 秒（初心者に優しい間隔、後で短縮）
 
 # ダメージ計算
 DAMAGE_PER_PUYO = 10
 CHAIN_DAMAGE_MULTIPLIER = 1.2
+
+# ダンジョン進行システム
+FLOOR_SCALING_HP = 1.25     # フロアごとの敵HP倍率（より緩やか）
+FLOOR_SCALING_DAMAGE = 1.15 # フロアごりの敵攻撃力倍率（より緩やか）
+FLOOR_SCALING_SPEED = 0.92  # フロアごとの敵攻撃間隔倍率（短縮をより緩やか）
 
 # ============================================================================
 # カードシステム関連
@@ -198,6 +206,7 @@ class GameState(Enum):
     BATTLE = "battle"
     REAL_BATTLE = "real_battle"  # 新しい戦闘状態
     REWARD_SELECT = "reward_select"  # 報酬選択画面
+    DUNGEON_MAP = "dungeon_map"  # ダンジョンマップ画面
     CARD_SELECT = "card_select"
     GAME_OVER = "game_over"
     VICTORY = "victory"

@@ -26,6 +26,14 @@ class SpecialPuyoType(Enum):
     POISON = "poison"          # 毒ぷよ：継続ダメージ
     WILD = "wild"              # ワイルドぷよ：隣接する色に変化
     CHAIN_STARTER = "chain_starter"  # 連鎖開始ぷよ：必ず連鎖を開始
+    
+    # 新しい特殊ぷよ
+    BUFF = "buff"              # バフぷよ：攻撃力上昇バフを付与
+    TIMED_POISON = "timed_poison"  # 時限毒ぷよ：設置後一定時間で毒ダメージ
+    CHAIN_EXTEND = "chain_extend"  # 連鎖拡張ぷよ：連鎖数を+1する
+    ABSORB_SHIELD = "absorb_shield"  # 吸収シールドぷよ：次のダメージを吸収してHPに変換
+    CURSE = "curse"            # 呪いぷよ：敵の攻撃力を一時的に減少
+    REFLECT = "reflect"        # 反射ぷよ：次に受けるダメージを敵に反射
 
 
 @dataclass
@@ -55,11 +63,17 @@ class SpecialPuyo:
         self.animation_timer = 0.0
         self.pulse_intensity = 0.0
         
+        # 時限発動系の特殊ぷよ用タイマー
+        self.countdown_timer = 0.0
+        if special_type == SpecialPuyoType.TIMED_POISON:
+            self.countdown_timer = self.effect.duration
+        
         logger.debug(f"Created special puyo: {special_type.value} at ({x}, {y})")
     
     def _get_effect_definition(self) -> SpecialEffect:
         """特殊効果の定義を取得"""
         effects = {
+            # 既存の特殊ぷよ
             SpecialPuyoType.BOMB: SpecialEffect(
                 effect_type="explosion",
                 power=20,
@@ -114,6 +128,43 @@ class SpecialPuyo:
                 power=4,  # 4個扱い
                 description="必ず連鎖を開始（4個分として扱う）"
             ),
+            
+            # 新しい特殊ぷよ
+            SpecialPuyoType.BUFF: SpecialEffect(
+                effect_type="attack_buff",
+                power=30,  # 30%攻撃力アップ
+                duration=15.0,  # 15秒持続
+                description="15秒間攻撃力を30%上昇させる"
+            ),
+            SpecialPuyoType.TIMED_POISON: SpecialEffect(
+                effect_type="delayed_poison",
+                power=25,  # 毒ダメージ
+                duration=8.0,  # 8秒後に発動
+                description="8秒後に25毒ダメージを与える"
+            ),
+            SpecialPuyoType.CHAIN_EXTEND: SpecialEffect(
+                effect_type="chain_extension",
+                power=1,  # 連鎖数+1
+                description="連鎖数を+1増加させる"
+            ),
+            SpecialPuyoType.ABSORB_SHIELD: SpecialEffect(
+                effect_type="absorb_barrier",
+                power=20,  # 最大20ダメージまで吸収
+                duration=12.0,  # 12秒持続
+                description="12秒間、最大20ダメージを吸収してHPに変換"
+            ),
+            SpecialPuyoType.CURSE: SpecialEffect(
+                effect_type="enemy_curse",
+                power=40,  # 40%攻撃力減少
+                duration=10.0,  # 10秒持続
+                description="10秒間敵の攻撃力を40%減少させる"
+            ),
+            SpecialPuyoType.REFLECT: SpecialEffect(
+                effect_type="damage_reflect",
+                power=100,  # 100%反射
+                duration=8.0,  # 8秒持続
+                description="8秒間、受けるダメージを敵に反射"
+            ),
         }
         
         return effects.get(self.special_type, SpecialEffect("unknown", 0))
@@ -125,6 +176,28 @@ class SpecialPuyo:
         
         if self.trigger_timer > 0:
             self.trigger_timer -= dt
+        
+        # 時限発動系のカウントダウン
+        if self.countdown_timer > 0:
+            self.countdown_timer -= dt
+            if self.countdown_timer <= 0:
+                # 時限発動！
+                return self._handle_timed_activation()
+        
+        return None
+    
+    def _handle_timed_activation(self) -> Dict:
+        """時限発動処理"""
+        if self.special_type == SpecialPuyoType.TIMED_POISON:
+            logger.info(f"Timed poison activated at ({self.x}, {self.y})")
+            return {
+                'type': 'timed_activation',
+                'effect_type': self.effect.effect_type,
+                'power': self.effect.power,
+                'position': (self.x, self.y),
+                'description': f"時限毒が発動！{self.effect.power}ダメージ"
+            }
+        return {}
     
     def trigger_effect(self, battle_context=None, puyo_grid=None) -> Dict:
         """特殊効果を発動"""
@@ -204,6 +277,7 @@ class SpecialPuyo:
     def get_display_color(self) -> tuple:
         """表示色を取得"""
         base_colors = {
+            # 既存の特殊ぷよ
             SpecialPuyoType.BOMB: Colors.ORANGE,
             SpecialPuyoType.LIGHTNING: Colors.YELLOW,
             SpecialPuyoType.RAINBOW: Colors.WHITE,
@@ -214,6 +288,14 @@ class SpecialPuyo:
             SpecialPuyoType.POISON: Colors.DARK_GRAY,
             SpecialPuyoType.WILD: Colors.LIGHT_GRAY,
             SpecialPuyoType.CHAIN_STARTER: Colors.RED,
+            
+            # 新しい特殊ぷよ
+            SpecialPuyoType.BUFF: (255, 215, 0),        # ゴールド
+            SpecialPuyoType.TIMED_POISON: (139, 69, 19), # 茶色
+            SpecialPuyoType.CHAIN_EXTEND: (255, 20, 147), # ピンク
+            SpecialPuyoType.ABSORB_SHIELD: (0, 191, 255), # 明るい青
+            SpecialPuyoType.CURSE: (75, 0, 130),        # インディゴ
+            SpecialPuyoType.REFLECT: (192, 192, 192),   # シルバー
         }
         
         base_color = base_colors.get(self.special_type, Colors.WHITE)
@@ -225,6 +307,7 @@ class SpecialPuyo:
     def get_icon_char(self) -> str:
         """アイコン文字を取得"""
         icons = {
+            # 既存の特殊ぷよ
             SpecialPuyoType.BOMB: "💣",
             SpecialPuyoType.LIGHTNING: "⚡",
             SpecialPuyoType.RAINBOW: "🌈",
@@ -235,6 +318,14 @@ class SpecialPuyo:
             SpecialPuyoType.POISON: "☠",
             SpecialPuyoType.WILD: "?",
             SpecialPuyoType.CHAIN_STARTER: "⭐",
+            
+            # 新しい特殊ぷよ
+            SpecialPuyoType.BUFF: "💪",
+            SpecialPuyoType.TIMED_POISON: "⏰",
+            SpecialPuyoType.CHAIN_EXTEND: "➕",
+            SpecialPuyoType.ABSORB_SHIELD: "🔄",
+            SpecialPuyoType.CURSE: "👁",
+            SpecialPuyoType.REFLECT: "🪞",
         }
         
         return icons.get(self.special_type, "S")
@@ -247,16 +338,25 @@ class SpecialPuyoManager:
         self.special_puyos: Dict[Tuple[int, int], SpecialPuyo] = {}
         self.spawn_chance = 0.05  # 5%の確率で特殊ぷよ生成
         self.rarity_weights = {
-            SpecialPuyoType.HEAL: 0.25,
-            SpecialPuyoType.BOMB: 0.20,
-            SpecialPuyoType.LIGHTNING: 0.15,
-            SpecialPuyoType.SHIELD: 0.12,
-            SpecialPuyoType.FREEZE: 0.10,
-            SpecialPuyoType.WILD: 0.08,
-            SpecialPuyoType.POISON: 0.05,
-            SpecialPuyoType.MULTIPLIER: 0.03,
-            SpecialPuyoType.RAINBOW: 0.015,
-            SpecialPuyoType.CHAIN_STARTER: 0.005,
+            # 既存の特殊ぷよ（出現率調整）
+            SpecialPuyoType.HEAL: 0.18,
+            SpecialPuyoType.BOMB: 0.15,
+            SpecialPuyoType.LIGHTNING: 0.12,
+            SpecialPuyoType.SHIELD: 0.10,
+            SpecialPuyoType.FREEZE: 0.08,
+            SpecialPuyoType.WILD: 0.06,
+            SpecialPuyoType.POISON: 0.04,
+            SpecialPuyoType.MULTIPLIER: 0.025,
+            SpecialPuyoType.RAINBOW: 0.012,
+            SpecialPuyoType.CHAIN_STARTER: 0.003,
+            
+            # 新しい特殊ぷよ
+            SpecialPuyoType.BUFF: 0.08,           # バフは戦略的に重要
+            SpecialPuyoType.TIMED_POISON: 0.05,   # 時限毒は中程度
+            SpecialPuyoType.CHAIN_EXTEND: 0.03,   # 連鎖拡張は強力なのでレア
+            SpecialPuyoType.ABSORB_SHIELD: 0.04,  # 吸収シールドは防御的
+            SpecialPuyoType.CURSE: 0.035,         # 呪いは攻撃的
+            SpecialPuyoType.REFLECT: 0.02,        # 反射は非常に強力なのでレア
         }
         
         logger.info("SpecialPuyoManager initialized")
@@ -292,8 +392,14 @@ class SpecialPuyoManager:
     
     def update(self, dt: float):
         """更新処理"""
+        timed_effects = []
+        
         for special_puyo in self.special_puyos.values():
-            special_puyo.update(dt)
+            result = special_puyo.update(dt)
+            if result:
+                timed_effects.append(result)
+        
+        return timed_effects
     
     def trigger_chain_effects(self, chain_positions: List[Tuple[int, int]], battle_context=None, puyo_grid=None) -> List[Dict]:
         """連鎖に含まれる特殊ぷよの効果を発動"""

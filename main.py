@@ -19,8 +19,9 @@ except ImportError:
     print("Please install pygame: pip install pygame")
     sys.exit(1)
 
-from src.core.game_engine import GameEngine, GameData
+from src.core.game_engine import GameEngine
 from src.core.constants import *
+from src.core.menu_handler import MenuHandler
 from src.puzzle.puyo_grid import PuyoGrid
 
 logger = logging.getLogger(__name__)
@@ -214,12 +215,16 @@ def main():
         # ゲームエンジン初期化
         engine = GameEngine()
         
-        # デモハンドラーを登録
+        # メインメニューハンドラーを登録
+        menu_handler = MenuHandler(engine)
+        engine.register_state_handler(GameState.MENU, menu_handler)
+        
+        # デモハンドラーも登録（後方互換性のため）
         demo_handler = DemoGameHandler(engine)
         engine.register_state_handler(GameState.PLAYING, demo_handler)
         
-        # ゲーム状態をプレイ中に設定
-        engine.change_state(GameState.PLAYING)
+        # ゲーム状態をメニューに設定
+        engine.change_state(GameState.MENU)
         
         # メインループ開始
         engine.run()

@@ -24,18 +24,13 @@ class EnemyIntentRenderer:
     
     def draw_intent(self, surface: pygame.Surface, x: int, y: int, 
                     action_info: Dict, fonts: Dict[str, pygame.font.Font]):
-        """敵の行動予告を敵の上に描画"""
-        print(f"DEBUG: draw_intent called with action_info: {action_info}")
-        
+        """敵の行動予告を敵の上に描画"""        
         if not action_info:
-            print("DEBUG: No action_info, returning")
             return
         
         action_type = action_info.get('type', ActionType.ATTACK)
         damage = action_info.get('damage', 0)
         name = action_info.get('name', '不明')
-        
-        print(f"DEBUG: action_type = {action_type}, damage = {damage}, name = {name}")
         
         # より大きなインテントボックス
         intent_x = x - 40
@@ -51,7 +46,6 @@ class EnemyIntentRenderer:
         icon_x = intent_x + intent_width // 2
         icon_y = intent_y + intent_height // 2
         
-        print(f"DEBUG: Drawing icon at ({icon_x}, {icon_y}) for action_type {action_type}")
         
         # 直接ここでアイコンを描画
         if action_type == ActionType.ATTACK:

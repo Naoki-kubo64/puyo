@@ -107,50 +107,61 @@ class Enemy:
         logger.info(f"Created {enemy_type.value} (Level {level}): {self.current_hp}/{self.max_hp} HP")
     
     def _calculate_max_hp(self) -> int:
-        """最大HPを計算"""
-        base_hp = {
-            EnemyType.SLIME: 45,
-            EnemyType.GOBLIN: 55,
-            EnemyType.ORC: 85,
-            EnemyType.GOLEM: 100,
-            EnemyType.MAGE: 60,
-            EnemyType.DRAGON: 120,
-            EnemyType.BOSS_DEMON: 200,
+        """最大HPを計算（新しいスケーリングシステム）"""
+        # 敵タイプごとの基本HP倍率
+        hp_multipliers = {
+            EnemyType.SLIME: 0.8,      # 弱い敵
+            EnemyType.GOBLIN: 1.0,     # 標準
+            EnemyType.ORC: 1.5,        # やや強い
+            EnemyType.GOLEM: 2.0,      # 硬い敵
+            EnemyType.MAGE: 1.2,       # 魔法使い
+            EnemyType.DRAGON: 3.0,     # 強敵
+            EnemyType.BOSS_DEMON: 5.0, # ボス
         }
         
-        hp = base_hp.get(self.enemy_type, 50)
-        # レベルによるスケーリング
-        return int(hp * (1 + (self.level - 1) * 0.3))
+        multiplier = hp_multipliers.get(self.enemy_type, 1.0)
+        base_hp = int(ENEMY_BASE_HP * multiplier)
+        
+        # フロアレベルによるスケーリング（新しいシステム）
+        return int(base_hp * (FLOOR_SCALING_HP ** (self.level - 1)))
     
     def _calculate_base_damage(self) -> int:
-        """基本ダメージを計算"""
-        base_damage = {
-            EnemyType.SLIME: 10,
-            EnemyType.GOBLIN: 14,
-            EnemyType.ORC: 18,
-            EnemyType.GOLEM: 12,
-            EnemyType.MAGE: 16,
-            EnemyType.DRAGON: 25,
-            EnemyType.BOSS_DEMON: 35,
+        """基本ダメージを計算（新しいスケーリングシステム）"""
+        # 敵タイプごとの基本ダメージ倍率
+        damage_multipliers = {
+            EnemyType.SLIME: 0.7,      # 弱い敵
+            EnemyType.GOBLIN: 1.0,     # 標準
+            EnemyType.ORC: 1.3,        # やや強い
+            EnemyType.GOLEM: 0.9,      # 硬いが攻撃は控えめ
+            EnemyType.MAGE: 1.1,       # 魔法使い
+            EnemyType.DRAGON: 1.8,     # 強敵
+            EnemyType.BOSS_DEMON: 2.5, # ボス
         }
         
-        damage = base_damage.get(self.enemy_type, 10)
-        # レベルによるスケーリング
-        return int(damage * (1 + (self.level - 1) * 0.2))
+        multiplier = damage_multipliers.get(self.enemy_type, 1.0)
+        base_damage = int(ENEMY_ATTACK_DAMAGE * multiplier)
+        
+        # フロアレベルによるスケーリング（新しいシステム）
+        return int(base_damage * (FLOOR_SCALING_DAMAGE ** (self.level - 1)))
     
     def _get_attack_interval(self) -> float:
-        """攻撃間隔を取得"""
-        intervals = {
-            EnemyType.SLIME: 3.5,     # 中程度
-            EnemyType.GOBLIN: 2.5,    # 速い
-            EnemyType.ORC: 3.0,       # 普通
-            EnemyType.GOLEM: 4.5,     # 遅い
-            EnemyType.MAGE: 4.0,      # やや遅い
-            EnemyType.DRAGON: 3.5,    # 中程度
-            EnemyType.BOSS_DEMON: 2.0, # 速い
+        """攻撃間隔を取得（新しいスケーリングシステム）"""
+        # 敵タイプごとの基本攻撃間隔倍率
+        interval_multipliers = {
+            EnemyType.SLIME: 1.2,      # やや遅い
+            EnemyType.GOBLIN: 0.8,     # 速い
+            EnemyType.ORC: 1.0,        # 標準
+            EnemyType.GOLEM: 1.5,      # 遅い
+            EnemyType.MAGE: 1.3,       # やや遅い
+            EnemyType.DRAGON: 1.1,     # やや速い
+            EnemyType.BOSS_DEMON: 0.7, # とても速い
         }
         
-        return intervals.get(self.enemy_type, 3.0)
+        multiplier = interval_multipliers.get(self.enemy_type, 1.0)
+        base_interval = ENEMY_ATTACK_INTERVAL * multiplier
+        
+        # フロアレベルによるスケーリング（攻撃が速くなる）
+        return base_interval * (FLOOR_SCALING_SPEED ** (self.level - 1))
     
     def _get_ai_type(self) -> EnemyAI:
         """AIタイプを決定"""
