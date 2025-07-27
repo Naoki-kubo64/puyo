@@ -78,6 +78,9 @@ class DungeonMapHandler:
             if event.key == pygame.K_ESCAPE:
                 # メインメニューに戻る
                 self.engine.change_state(GameState.MENU)
+            elif event.key == pygame.K_i:
+                # インベントリを開く
+                self._open_inventory()
             elif event.key == pygame.K_UP:
                 # 上スクロール
                 self._scroll(-30)
@@ -437,6 +440,16 @@ class DungeonMapHandler:
     def get_dungeon_map(self) -> DungeonMap:
         """ダンジョンマップを取得"""
         return self.dungeon_map
+    
+    def _open_inventory(self):
+        """インベントリを開く"""
+        try:
+            from ..inventory.inventory_ui import InventoryUI
+            inventory_ui = InventoryUI(self.engine)
+            self.engine.register_state_handler(GameState.INVENTORY, inventory_ui)
+            self.engine.change_state(GameState.INVENTORY)
+        except Exception as e:
+            logger.error(f"Failed to open inventory: {e}")
     
     def set_dungeon_map(self, dungeon_map: DungeonMap):
         """ダンジョンマップを設定"""

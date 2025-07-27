@@ -12,6 +12,7 @@ from enum import Enum
 
 from .constants import *
 from .sound_manager import get_sound_manager
+from .player_data import PlayerData
 
 # ログ設定
 logging.basicConfig(level=LOG_LEVEL)
@@ -85,6 +86,9 @@ class GameEngine:
         
         # ゲームデータ
         self.game_data = GameData()
+        
+        # プレイヤーデータ
+        self.player = PlayerData()
         
         # 状態管理システム
         self.state_handlers = {}

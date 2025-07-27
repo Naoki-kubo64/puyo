@@ -10,10 +10,8 @@ from enum import Enum
 from dataclasses import dataclass
 
 from ..core.constants import *
-from ..core.game_engine import get_appropriate_font
-from ..items.potions import Potion, create_random_potion
-from ..items.artifacts import Artifact, create_random_artifact
-from ..special_puyo.special_puyo import SpecialPuyoType
+from ..inventory.player_inventory import create_item, ItemRarity
+import pygame.font
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +22,18 @@ class RewardType(Enum):
     POTION = "potion"               # ポーション
     ARTIFACT = "artifact"           # 装飾品
     HP_UPGRADE = "hp_upgrade"       # 最大HP増加
-    SPECIAL_PUYO_UNLOCK = "special_puyo_unlock"  # 特殊ぷよ解放
-    PUYO_UPGRADE = "puyo_upgrade"   # ぷよ能力アップ
+    ENERGY_UPGRADE = "energy_upgrade"  # エネルギー増加
+    CHAIN_UPGRADE = "chain_upgrade"    # 連鎖ダメージアップ
 
 
 @dataclass
 class Reward:
     """報酬クラス"""
     reward_type: RewardType
-    value: Union[int, Potion, Artifact, str]
+    value: Union[int, str]
     name: str
     description: str
-    rarity: Rarity = Rarity.COMMON
+    rarity: ItemRarity = ItemRarity.COMMON
     
     def get_display_text(self) -> List[str]:
         """表示用テキストを取得"""
@@ -61,17 +59,17 @@ class Reward:
     def get_color(self) -> tuple:
         """報酬の色を取得"""
         if self.reward_type == RewardType.GOLD:
-            return Colors.YELLOW
+            return Colors.GOLD
         elif self.reward_type == RewardType.POTION:
-            return self.value.color if hasattr(self.value, 'color') else Colors.GREEN
+            return Colors.GREEN
         elif self.reward_type == RewardType.ARTIFACT:
-            return self.value.color if hasattr(self.value, 'color') else Colors.BLUE
+            return self.rarity.color
         elif self.reward_type == RewardType.HP_UPGRADE:
             return Colors.RED
-        elif self.reward_type == RewardType.SPECIAL_PUYO_UNLOCK:
+        elif self.reward_type == RewardType.ENERGY_UPGRADE:
+            return Colors.BLUE
+        elif self.reward_type == RewardType.CHAIN_UPGRADE:
             return Colors.PURPLE
-        elif self.reward_type == RewardType.PUYO_UPGRADE:
-            return Colors.CYAN
         
         return Colors.WHITE
     

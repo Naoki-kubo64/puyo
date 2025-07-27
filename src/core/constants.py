@@ -211,6 +211,7 @@ class GameState(Enum):
     SHOP = "shop"  # ショップ画面
     EVENT = "event"  # ランダムイベント画面
     TREASURE = "treasure"  # 宝箱画面
+    INVENTORY = "inventory"  # インベントリ画面
     CARD_SELECT = "card_select"
     GAME_OVER = "game_over"
     VICTORY = "victory"
