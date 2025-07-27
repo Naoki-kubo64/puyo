@@ -110,8 +110,8 @@ class RewardGenerator:
             (RewardType.POTION, 0.4),
             (RewardType.ARTIFACT, 0.25),
             (RewardType.HP_UPGRADE, 0.15),
-            (RewardType.PUYO_UPGRADE, 0.15),
-            (RewardType.SPECIAL_PUYO_UNLOCK, 0.05),
+            (RewardType.CHAIN_UPGRADE, 0.15),
+            (RewardType.ENERGY_UPGRADE, 0.05),
         ]
         
         # ボス戦では装飾品の確率アップ
@@ -120,8 +120,8 @@ class RewardGenerator:
                 (RewardType.ARTIFACT, 0.5),
                 (RewardType.POTION, 0.25),
                 (RewardType.HP_UPGRADE, 0.15),
-                (RewardType.PUYO_UPGRADE, 0.08),
-                (RewardType.SPECIAL_PUYO_UNLOCK, 0.02),
+                (RewardType.CHAIN_UPGRADE, 0.08),
+                (RewardType.ENERGY_UPGRADE, 0.02),
             ]
         
         # 報酬選択肢を生成
@@ -152,23 +152,42 @@ class RewardGenerator:
         """特定の種類の報酬を生成"""
         
         if reward_type == RewardType.POTION:
-            potion = create_random_potion(floor_level)
+            # ポーション報酬の簡易実装
+            potions = ["health_potion_small", "health_potion_medium", "energy_potion"]
+            potion_id = random.choice(potions)
+            
+            names = {
+                "health_potion_small": "小さな体力ポーション",
+                "health_potion_medium": "体力ポーション", 
+                "energy_potion": "エネルギーポーション"
+            }
+            
             return Reward(
                 reward_type=RewardType.POTION,
-                value=potion,
-                name=potion.name,
-                description=potion.description,
-                rarity=potion.rarity
+                value=potion_id,
+                name=names.get(potion_id, "ポーション"),
+                description="クリックで獲得",
+                rarity=ItemRarity.COMMON
             )
         
         elif reward_type == RewardType.ARTIFACT:
-            artifact = create_random_artifact(floor_level)
+            # アーティファクト報酬の簡易実装
+            artifacts = ["lucky_coin", "vitality_amulet", "power_ring", "merchants_badge"]
+            artifact_id = random.choice(artifacts)
+            
+            names = {
+                "lucky_coin": "幸運のコイン",
+                "vitality_amulet": "活力のお守り",
+                "power_ring": "力の指輪",
+                "merchants_badge": "商人の徽章"
+            }
+            
             return Reward(
                 reward_type=RewardType.ARTIFACT,
-                value=artifact,
-                name=artifact.name,
-                description=artifact.description,
-                rarity=artifact.rarity
+                value=artifact_id,
+                name=names.get(artifact_id, "アーティファクト"),
+                description="永続効果アイテム",
+                rarity=ItemRarity.UNCOMMON
             )
         
         elif reward_type == RewardType.HP_UPGRADE:
@@ -178,61 +197,26 @@ class RewardGenerator:
                 value=hp_amount,
                 name=f"最大HP +{hp_amount}",
                 description="最大体力が永続的に増加",
-                rarity=Rarity.UNCOMMON
+                rarity=ItemRarity.UNCOMMON
             )
         
-        elif reward_type == RewardType.PUYO_UPGRADE:
-            upgrades = [
-                ("連鎖威力アップ", "連鎖によるダメージが10%増加", 10),
-                ("落下速度アップ", "ぷよの落下速度が15%増加", 15),
-                ("色彩集中", "出現するぷよの色数が1つ減少", 1),
-                ("特殊ぷよ確率アップ", "特殊ぷよの出現率が50%増加", 50),
-            ]
-            
-            upgrade_name, upgrade_desc, upgrade_value = random.choice(upgrades)
+        elif reward_type == RewardType.CHAIN_UPGRADE:
+            chain_bonus = random.randint(10, 20)
             return Reward(
-                reward_type=RewardType.PUYO_UPGRADE,
-                value=upgrade_value,
-                name=upgrade_name,
-                description=upgrade_desc,
-                rarity=Rarity.RARE
+                reward_type=RewardType.CHAIN_UPGRADE,
+                value=chain_bonus,
+                name=f"連鎖ダメージ+{chain_bonus}%",
+                description="連鎖攻撃の威力が永続的に向上",
+                rarity=ItemRarity.RARE
             )
         
-        elif reward_type == RewardType.SPECIAL_PUYO_UNLOCK:
-            # まだ解放されていない特殊ぷよをランダム選択
-            special_types = list(SpecialPuyoType)
-            selected_type = random.choice(special_types)
-            
-            type_names = {
-                # 既存の特殊ぷよ
-                SpecialPuyoType.BOMB: "爆弾ぷよ",
-                SpecialPuyoType.LIGHTNING: "雷ぷよ",
-                SpecialPuyoType.RAINBOW: "虹ぷよ",
-                SpecialPuyoType.MULTIPLIER: "倍率ぷよ",
-                SpecialPuyoType.FREEZE: "氷ぷよ",
-                SpecialPuyoType.HEAL: "回復ぷよ",
-                SpecialPuyoType.SHIELD: "盾ぷよ",
-                SpecialPuyoType.POISON: "毒ぷよ",
-                SpecialPuyoType.WILD: "ワイルドぷよ",
-                SpecialPuyoType.CHAIN_STARTER: "連鎖開始ぷよ",
-                
-                # 新しい特殊ぷよ
-                SpecialPuyoType.BUFF: "バフぷよ",
-                SpecialPuyoType.TIMED_POISON: "時限毒ぷよ",
-                SpecialPuyoType.CHAIN_EXTEND: "連鎖拡張ぷよ",
-                SpecialPuyoType.ABSORB_SHIELD: "吸収シールドぷよ",
-                SpecialPuyoType.CURSE: "呪いぷよ",
-                SpecialPuyoType.REFLECT: "反射ぷよ",
-            }
-            
-            type_name = type_names.get(selected_type, "特殊ぷよ")
-            
+        elif reward_type == RewardType.ENERGY_UPGRADE:
             return Reward(
-                reward_type=RewardType.SPECIAL_PUYO_UNLOCK,
-                value=selected_type.value,
-                name=f"{type_name}解放",
-                description=f"{type_name}の出現率が大幅に増加",
-                rarity=Rarity.EPIC
+                reward_type=RewardType.ENERGY_UPGRADE,
+                value=1,
+                name="最大エネルギー+1",
+                description="戦闘で使えるエネルギーが増加",
+                rarity=ItemRarity.RARE
             )
         
         return None
