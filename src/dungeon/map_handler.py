@@ -297,13 +297,42 @@ class DungeonMapHandler:
     
     def _transition_to_event(self, node: DungeonNode):
         """イベントへの遷移"""
-        logger.info("Entering random event")
-        self.transition_pending = True
+        logger.info(f"Transitioning to event from node {node.node_id}")
+        try:
+            from ..event.event_handler import EventHandler
+            event_handler = EventHandler(self.engine, current_node=node)
+            self.engine.register_state_handler(GameState.EVENT, event_handler)
+            self.engine.change_state(GameState.EVENT)
+            node.visited = True
+        except Exception as e:
+            logger.error(f"Failed to create event handler: {e}")
+            self._simulate_event()
+            node.visited = True
+    
+    def _simulate_event(self):
+        """イベントシステムのフォールバック - 簡単なランダムイベント"""
+        import random
         
-        # ランダムイベントの実行
-        # TODO: イベントシステムとの連携
-        logger.info("Event completed - returning to map")
-        self.transition_pending = False
+        # ランダムイベントのシミュレーション
+        events = [
+            ("幸運の発見", 30, 0, "道端で金貨を発見した！"),
+            ("休憩", 0, 15, "静かな場所で休憩した。"),
+            ("危険な罠", -20, -8, "罠にかかってしまった..."),
+            ("商人との出会い", 50, 0, "親切な商人からボーナスを受け取った！"),
+            ("謎の祝福", 0, 5, "謎の力により体力が向上した！")
+        ]
+        
+        event_name, gold_change, hp_change, message = random.choice(events)
+        
+        # プレイヤーに効果を適用
+        if gold_change != 0:
+            self.engine.player.gold += gold_change
+        if hp_change > 0:
+            self.engine.player.heal(hp_change)
+        elif hp_change < 0:
+            self.engine.player.take_damage(abs(hp_change))
+        
+        logger.info(f"Random event: {event_name} - {message}")
     
     def _transition_to_rest(self, node: DungeonNode):
         """休憩所への遷移"""
