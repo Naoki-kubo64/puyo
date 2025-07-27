@@ -90,6 +90,10 @@ class GameEngine:
         # プレイヤーデータ
         self.player = PlayerData()
         
+        # ゲーム終了条件管理
+        from ..game_completion.game_conditions import GameConditionManager
+        self.condition_manager = GameConditionManager(self)
+        
         # 状態管理システム
         self.state_handlers = {}
         self.state_systems = {}
@@ -294,6 +298,10 @@ class GameEngine:
         """ゲーム状態更新"""
         if self.paused:
             return
+        
+        # ゲーム終了条件チェック（ゲーム中のみ）
+        if self.current_state in [GameState.DUNGEON_MAP, GameState.BATTLE, GameState.REAL_BATTLE]:
+            self.condition_manager.check_game_conditions()
         
         # 現在の状態のシステムを更新
         if self.current_state in self.state_systems:
