@@ -9,8 +9,8 @@ from typing import Dict, List
 
 from .constants import *
 from .game_engine import GameEngine
-from ..puzzle.puyo_grid import PuyoGrid
-from ..puzzle.falling_system import FallingSystem
+from puzzle.puyo_grid import PuyoGrid
+from puzzle.falling_system import FallingSystem
 from .authentic_demo_handler import AuthenticDemoHandler
 
 logger = logging.getLogger(__name__)

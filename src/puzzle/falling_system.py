@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 import random
 
-from ..core.constants import *
+from core.constants import *
 from .puyo_grid import PuyoGrid, PuyoPosition
 
 logger = logging.getLogger(__name__)

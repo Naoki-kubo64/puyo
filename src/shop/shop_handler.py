@@ -8,10 +8,10 @@ import logging
 import random
 from typing import Dict, List, Optional, Union
 
-from ..core.constants import *
-from ..core.game_engine import GameEngine
-from ..items.potions import Potion, create_random_potion
-from ..items.artifacts import Artifact, create_random_artifact
+from core.constants import *
+from core.game_engine import GameEngine
+from items.potions import Potion, create_random_potion
+from items.artifacts import Artifact, create_random_artifact
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class ShopHandler:
         self.last_purchased_item = None
         
         # プレイヤーのゴールド
-        self.player_gold = getattr(self.engine.game_data, 'gold', 100)
+        self.player_gold = self.engine.player.gold
         
         # UI設定
         self.background_color = (25, 15, 35)  # 紫がかった暗い色
@@ -150,7 +150,7 @@ class ShopHandler:
         self.last_purchased_item = None
         
         # プレイヤーのゴールドを更新
-        self.player_gold = getattr(self.engine.game_data, 'gold', 100)
+        self.player_gold = self.engine.player.gold
     
     def handle_event(self, event: pygame.event.Event):
         """イベント処理"""
@@ -183,8 +183,8 @@ class ShopHandler:
                 # プレイヤーのインベントリに追加
                 self._add_item_to_inventory(shop_item.item)
                 
-                # ゲームデータのゴールドを更新
-                self.engine.game_data.gold = self.player_gold
+                # プレイヤーデータのゴールドを更新
+                self.engine.player.gold = self.player_gold
                 
                 logger.info(f"Purchased {shop_item.get_name()} for {shop_item.price} gold")
             else:
@@ -194,38 +194,42 @@ class ShopHandler:
         """アイテムをインベントリに追加"""
         # プレイヤーのインベントリシステムを実装
         if isinstance(item, Potion):
-            if not hasattr(self.engine.game_data, 'potions'):
-                self.engine.game_data.potions = []
-            self.engine.game_data.potions.append(item)
+            # 即座に効果を発揮するポーションは直接適用
+            if item.effect_type == "heal":
+                self._apply_healing_effect(item)
+            else:
+                self.engine.player.add_potion(item)
         elif isinstance(item, Artifact):
-            if not hasattr(self.engine.game_data, 'artifacts'):
-                self.engine.game_data.artifacts = []
-            self.engine.game_data.artifacts.append(item)
+            self.engine.player.add_artifact(item)
             
             # 装飾品の効果を即座に適用
             self._apply_artifact_effect(item)
+    
+    def _apply_healing_effect(self, potion: Potion):
+        """回復ポーションの効果を適用"""
+        if potion.effect_type == "heal":
+            # プレイヤーのHPを回復（最大HPを超えないように）
+            heal_amount = potion.effect_value
+            self.engine.player.hp = min(self.engine.player.hp + heal_amount, self.engine.player.max_hp)
+            logger.info(f"Healed {heal_amount} HP. Current HP: {self.engine.player.hp}/{self.engine.player.max_hp}")
     
     def _apply_artifact_effect(self, artifact: Artifact):
         """装飾品の効果を適用"""
         # 基本的な装飾品効果
         if artifact.effect_type == "max_hp":
-            self.engine.game_data.player_max_hp += artifact.effect_value
-            self.engine.game_data.player_hp += artifact.effect_value  # 現在HPも増加
+            self.engine.player.max_hp += artifact.effect_value
+            self.engine.player.hp += artifact.effect_value  # 現在HPも増加
         elif artifact.effect_type == "damage":
-            if not hasattr(self.engine.game_data, 'damage_bonus'):
-                self.engine.game_data.damage_bonus = 0
-            self.engine.game_data.damage_bonus += artifact.effect_value
+            self.engine.player.damage_bonus += artifact.effect_value
         elif artifact.effect_type == "chain":
-            if not hasattr(self.engine.game_data, 'chain_damage_bonus'):
-                self.engine.game_data.chain_damage_bonus = 0
-            self.engine.game_data.chain_damage_bonus += artifact.effect_value
+            self.engine.player.chain_damage_bonus += artifact.effect_value
         
         logger.info(f"Applied artifact effect: {artifact.effect_type} +{artifact.effect_value}")
     
     def _leave_shop(self):
         """ショップを離れてマップに戻る"""
         try:
-            from ..dungeon.map_handler import DungeonMapHandler
+            from dungeon.map_handler import DungeonMapHandler
             
             # マップ進行処理
             if (hasattr(self.engine, 'persistent_dungeon_map') and self.engine.persistent_dungeon_map and 

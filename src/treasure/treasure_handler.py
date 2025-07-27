@@ -8,11 +8,12 @@ import logging
 import random
 from typing import Dict, List, Optional, Union
 
-from ..core.constants import *
-from ..core.game_engine import GameEngine
-from ..items.potions import Potion, create_random_potion
-from ..items.artifacts import Artifact, create_random_artifact
-from ..rewards.reward_system import RewardGenerator, RewardType, Reward
+from core.constants import *
+from core.game_engine import GameEngine
+from items.potions import Potion, create_random_potion
+from items.artifacts import Artifact, create_random_artifact
+from rewards.reward_system import RewardGenerator, RewardType, Reward
+from inventory.player_inventory import create_item
 
 logger = logging.getLogger(__name__)
 
@@ -243,12 +244,15 @@ class TreasureHandler:
     
     def _collect_treasure(self):
         """宝箱の報酬を回収してマップに戻る"""
+        # 宝箱訪問統計を更新
+        self.engine.player.visit_room("treasure")
+        
         # 報酬を適用
         for reward in self.treasure_rewards:
             self._apply_reward(reward)
         
         try:
-            from ..dungeon.map_handler import DungeonMapHandler
+            from dungeon.map_handler import DungeonMapHandler
             
             # マップ進行処理
             if (hasattr(self.engine, 'persistent_dungeon_map') and self.engine.persistent_dungeon_map and 
@@ -283,48 +287,105 @@ class TreasureHandler:
     def _apply_reward(self, reward: Reward):
         """報酬を適用"""
         if reward.reward_type == RewardType.GOLD:
-            if not hasattr(self.engine.game_data, 'gold'):
-                self.engine.game_data.gold = 0
-            self.engine.game_data.gold += reward.value
+            self.engine.player.gain_gold(reward.value)
             logger.info(f"Gained {reward.value} gold")
         
         elif reward.reward_type == RewardType.HP_UPGRADE:
-            self.engine.game_data.player_max_hp += reward.value
-            self.engine.game_data.player_hp += reward.value  # 現在HPも増加
+            self.engine.player.max_hp += reward.value
+            self.engine.player.hp += reward.value  # 現在HPも増加
             logger.info(f"Max HP increased by {reward.value}")
         
         elif reward.reward_type == RewardType.POTION:
-            if not hasattr(self.engine.game_data, 'potions'):
-                self.engine.game_data.potions = []
-            self.engine.game_data.potions.append(reward.value)
-            logger.info(f"Gained potion: {reward.value.name}")
+            # Convert Potion object to inventory item
+            potion_item = self._convert_potion_to_item(reward.value)
+            if potion_item:
+                self.engine.player.inventory.add_item(potion_item)
+                logger.info(f"Gained potion: {reward.value.name}")
         
         elif reward.reward_type == RewardType.ARTIFACT:
-            if not hasattr(self.engine.game_data, 'artifacts'):
-                self.engine.game_data.artifacts = []
-            self.engine.game_data.artifacts.append(reward.value)
-            self._apply_artifact_effect(reward.value)
-            logger.info(f"Gained artifact: {reward.value.name}")
+            # Convert Artifact object to inventory item
+            artifact_item = self._convert_artifact_to_item(reward.value)
+            if artifact_item:
+                self.engine.player.inventory.add_item(artifact_item)
+                self._apply_artifact_effect(reward.value)
+                logger.info(f"Gained artifact: {reward.value.name}")
     
     def _apply_artifact_effect(self, artifact: Artifact):
         """装飾品の効果を適用"""
         if artifact.effect_type == "hybrid":
             # 複合効果
             if hasattr(artifact, 'hp_bonus'):
-                self.engine.game_data.player_max_hp += artifact.hp_bonus
-                self.engine.game_data.player_hp += artifact.hp_bonus
+                self.engine.player.max_hp += artifact.hp_bonus
+                self.engine.player.hp += artifact.hp_bonus
             if hasattr(artifact, 'chain_bonus'):
-                if not hasattr(self.engine.game_data, 'chain_damage_bonus'):
-                    self.engine.game_data.chain_damage_bonus = 0
-                self.engine.game_data.chain_damage_bonus += artifact.chain_bonus
+                self.engine.player.chain_damage_multiplier += artifact.chain_bonus / 100.0
         elif artifact.effect_type == "max_hp":
-            self.engine.game_data.player_max_hp += artifact.effect_value
-            self.engine.game_data.player_hp += artifact.effect_value
+            self.engine.player.max_hp += artifact.effect_value
+            self.engine.player.hp += artifact.effect_value
         elif artifact.effect_type == "damage":
-            if not hasattr(self.engine.game_data, 'damage_bonus'):
-                self.engine.game_data.damage_bonus = 0
-            self.engine.game_data.damage_bonus += artifact.effect_value
+            self.engine.player.skills.attack_power += artifact.effect_value
         # その他の効果は戦闘時に処理
+        
+        # アーティファクト効果を再計算
+        self.engine.player.apply_artifact_effects()
+    
+    def _convert_potion_to_item(self, potion: Potion):
+        """Potion object を inventory Item に変換"""
+        from inventory.player_inventory import Item, ItemType, ItemRarity
+        
+        # レアリティ変換
+        rarity_mapping = {
+            Rarity.COMMON: ItemRarity.COMMON,
+            Rarity.UNCOMMON: ItemRarity.UNCOMMON,
+            Rarity.RARE: ItemRarity.RARE,
+            Rarity.EPIC: ItemRarity.EPIC,
+            Rarity.LEGENDARY: ItemRarity.LEGENDARY
+        }
+        
+        # 効果値を取得
+        effect_value = 0
+        if hasattr(potion, 'effect') and hasattr(potion.effect, 'value'):
+            effect_value = int(potion.effect.value)
+        
+        return Item(
+            id=f"treasure_potion_{hash(potion.name) % 10000}",
+            name=potion.name,
+            description=potion.description,
+            item_type=ItemType.POTION,
+            rarity=rarity_mapping.get(potion.rarity, ItemRarity.COMMON),
+            quantity=1,
+            consumable=True,
+            effect_value=effect_value
+        )
+    
+    def _convert_artifact_to_item(self, artifact: Artifact):
+        """Artifact object を inventory Item に変換"""
+        from inventory.player_inventory import Item, ItemType, ItemRarity
+        
+        # レアリティ変換
+        rarity_mapping = {
+            Rarity.COMMON: ItemRarity.COMMON,
+            Rarity.UNCOMMON: ItemRarity.UNCOMMON,
+            Rarity.RARE: ItemRarity.RARE,
+            Rarity.EPIC: ItemRarity.EPIC,
+            Rarity.LEGENDARY: ItemRarity.LEGENDARY
+        }
+        
+        # 効果値を取得
+        effect_value = 0
+        if hasattr(artifact, 'effect_value'):
+            effect_value = artifact.effect_value
+        
+        return Item(
+            id=f"treasure_artifact_{hash(artifact.name) % 10000}",
+            name=artifact.name,
+            description=artifact.description,
+            item_type=ItemType.ARTIFACT,
+            rarity=rarity_mapping.get(artifact.rarity, ItemRarity.COMMON),
+            quantity=1,
+            consumable=False,
+            effect_value=effect_value
+        )
     
     def render(self, surface: pygame.Surface):
         """描画処理"""

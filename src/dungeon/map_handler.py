@@ -7,8 +7,8 @@ import pygame
 import logging
 from typing import Optional
 
-from ..core.constants import *
-from ..core.game_engine import GameEngine
+from core.constants import *
+from core.game_engine import GameEngine
 from .dungeon_map import DungeonMap, DungeonNode, NodeType
 from .map_renderer import MapRenderer
 
@@ -195,7 +195,7 @@ class DungeonMapHandler:
         self.transition_pending = True
         
         try:
-            from ..battle.battle_handler import BattleHandler
+            from battle.battle_handler import BattleHandler
             
             # 戦闘ハンドラーを作成（現在のノード情報を渡す）
             battle_handler = BattleHandler(self.engine, floor_level=node.floor + 1, current_node=node)
@@ -219,7 +219,7 @@ class DungeonMapHandler:
         self.transition_pending = True
         
         try:
-            from ..battle.battle_handler import BattleHandler
+            from battle.battle_handler import BattleHandler
             
             # ボス戦用の戦闘ハンドラーを作成（現在のノード情報を渡す）
             battle_handler = BattleHandler(self.engine, floor_level=node.floor + 1, current_node=node)
@@ -242,7 +242,7 @@ class DungeonMapHandler:
         self.transition_pending = True
         
         try:
-            from ..battle.battle_handler import BattleHandler
+            from battle.battle_handler import BattleHandler
             
             # エリート戦用の戦闘ハンドラーを作成（現在のノード情報を渡す）
             battle_handler = BattleHandler(self.engine, floor_level=node.floor + 1, current_node=node)
@@ -265,7 +265,7 @@ class DungeonMapHandler:
         self.transition_pending = True
         
         try:
-            from ..treasure.treasure_handler import TreasureHandler
+            from treasure.treasure_handler import TreasureHandler
             
             # 宝箱ハンドラーを作成
             treasure_handler = TreasureHandler(self.engine, current_node=node)
@@ -285,16 +285,17 @@ class DungeonMapHandler:
     
     def _simulate_treasure(self):
         """宝箱シミュレーション（フォールバック）"""
-        # 簡易報酬獲得
-        if not hasattr(self.engine.game_data, 'gold'):
-            self.engine.game_data.gold = 0
+        # 簡易報酬獲得（新しいプレイヤーデータシステム使用）
         bonus_gold = random.randint(50, 100)
-        self.engine.game_data.gold += bonus_gold
+        self.engine.player.gain_gold(bonus_gold)
         
-        # HP回復
+        # HP強化と回復
         hp_bonus = random.randint(10, 20)
-        self.engine.game_data.player_max_hp += hp_bonus
-        self.engine.game_data.player_hp += hp_bonus
+        self.engine.player.level_up_skill("max_hp", hp_bonus)
+        self.engine.player.heal(hp_bonus)
+        
+        # 統計情報更新
+        self.engine.player.visit_room("treasure")
         
         logger.info(f"Treasure simulation: gained {bonus_gold} gold and {hp_bonus} max HP")
     
@@ -302,7 +303,7 @@ class DungeonMapHandler:
         """イベントへの遷移"""
         logger.info(f"Transitioning to event from node {node.node_id}")
         try:
-            from ..event.event_handler import EventHandler
+            from event.event_handler import EventHandler
             event_handler = EventHandler(self.engine, current_node=node)
             self.engine.register_state_handler(GameState.EVENT, event_handler)
             self.engine.change_state(GameState.EVENT)
@@ -343,7 +344,7 @@ class DungeonMapHandler:
         self.transition_pending = True
         
         try:
-            from ..rest.rest_handler import RestHandler
+            from rest.rest_handler import RestHandler
             
             # 休憩所ハンドラーを作成
             rest_handler = RestHandler(self.engine, current_node=node)
@@ -379,7 +380,7 @@ class DungeonMapHandler:
         self.transition_pending = True
         
         try:
-            from ..shop.shop_handler import ShopHandler
+            from shop.shop_handler import ShopHandler
             
             # ショップハンドラーを作成
             shop_handler = ShopHandler(self.engine, current_node=node)
@@ -444,7 +445,7 @@ class DungeonMapHandler:
     def _open_inventory(self):
         """インベントリを開く"""
         try:
-            from ..inventory.inventory_ui import InventoryUI
+            from inventory.inventory_ui import InventoryUI
             inventory_ui = InventoryUI(self.engine)
             self.engine.register_state_handler(GameState.INVENTORY, inventory_ui)
             self.engine.change_state(GameState.INVENTORY)
@@ -465,7 +466,7 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
     
     pygame.init()
-    from ..core.game_engine import GameEngine
+    from core.game_engine import GameEngine
     
     logging.basicConfig(level=logging.INFO)
     

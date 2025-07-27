@@ -259,7 +259,7 @@ class MenuHandler:
     def _start_dungeon_adventure(self):
         """ダンジョン冒険を開始"""
         try:
-            from ..dungeon.map_handler import DungeonMapHandler
+            from dungeon.map_handler import DungeonMapHandler
             
             # ダンジョンマップハンドラーを作成
             map_handler = DungeonMapHandler(self.engine)
@@ -293,7 +293,7 @@ class MenuHandler:
     def _start_battle_test(self):
         """戦闘テストを開始"""
         try:
-            from ..battle.battle_handler import BattleHandler
+            from battle.battle_handler import BattleHandler
             
             # 戦闘ハンドラーを作成
             battle_handler = BattleHandler(self.engine, floor_level=1)
@@ -310,7 +310,7 @@ class MenuHandler:
     def _show_dungeon_map(self):
         """ダンジョンマップを表示"""
         try:
-            from ..dungeon.map_handler import DungeonMapHandler
+            from dungeon.map_handler import DungeonMapHandler
             
             # ダンジョンマップハンドラーを作成
             map_handler = DungeonMapHandler(self.engine)

@@ -1,10 +1,10 @@
 import pygame
 import random
 from typing import List, Dict, Callable, Optional
-from ..core.state_handler import StateHandler
-from ..core.constants import GameState, Colors, NodeType
-from ..core.game_engine import GameEngine
-from ..dungeon.dungeon_node import DungeonNode
+from core.state_handler import StateHandler
+from core.constants import GameState, Colors, NodeType
+from core.game_engine import GameEngine
+from dungeon.dungeon_node import DungeonNode
 
 class EventChoice:
     def __init__(self, text: str, effect: Callable, description: str = ""):

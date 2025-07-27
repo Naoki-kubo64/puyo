@@ -6,10 +6,10 @@ Slay the Spire風の報酬選択画面
 import pygame
 import random
 from typing import List, Optional
-from ..core.state_handler import StateHandler
-from ..core.constants import GameState, Colors
-from ..core.game_engine import GameEngine
-from ..inventory.player_inventory import create_item, ItemRarity
+from core.state_handler import StateHandler
+from core.constants import GameState, Colors
+from core.game_engine import GameEngine
+from inventory.player_inventory import create_item, ItemRarity
 from .reward_system import Reward, RewardType
 
 class BattleRewardHandler(StateHandler):

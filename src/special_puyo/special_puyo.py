@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 from enum import Enum
 from dataclasses import dataclass
 
-from ..core.constants import *
+from core.constants import *
 
 logger = logging.getLogger(__name__)
 

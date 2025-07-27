@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple
 from .constants import *
 from .game_engine import GameEngine
 from .sound_manager import play_se, SoundType
-from ..puzzle.puyo_grid import PuyoGrid
+from puzzle.puyo_grid import PuyoGrid
 
 logger = logging.getLogger(__name__)
 

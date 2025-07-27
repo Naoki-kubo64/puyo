@@ -7,16 +7,16 @@ import logging
 import math
 from typing import Optional, List
 
-from ..core.constants import *
-from ..core.game_engine import GameEngine, get_appropriate_font
-from ..core.authentic_demo_handler import AuthenticDemoHandler
-from ..core.background_renderer import BackgroundRenderer
-from ..core.top_ui_bar import TopUIBar
+from core.constants import *
+from core.game_engine import GameEngine, get_appropriate_font
+from core.authentic_demo_handler import AuthenticDemoHandler
+from core.background_renderer import BackgroundRenderer
+from core.top_ui_bar import TopUIBar
 from .enemy import Enemy, EnemyAction, EnemyGroup, create_enemy_group, ActionType
 from .enemy_renderer import EnemyRenderer
 from .enemy_intent_renderer import EnemyIntentRenderer
-from ..special_puyo.special_puyo import special_puyo_manager
-from ..rewards.reward_system import RewardGenerator, RewardSelectionHandler
+from special_puyo.special_puyo import special_puyo_manager
+from rewards.reward_system import RewardGenerator, RewardSelectionHandler
 
 logger = logging.getLogger(__name__)
 
@@ -202,8 +202,14 @@ class BattleHandler:
         else:
             logger.warning("Battle handler initialized without current_node!")
         
-        # プレイヤー
-        self.player = Player()
+        # プレイヤー (統合されたプレイヤーデータを使用)
+        self.player = self.engine.player  # ゲームエンジンの統合プレイヤーデータを使用
+        self.battle_player = Player()  # 戦闘固有の機能用（バフ・デバフなど）
+        
+        # 戦闘開始時に battle_player の HP を PlayerData と同期
+        self.battle_player.max_hp = self.player.max_hp
+        self.battle_player.current_hp = self.player.hp
+        self.battle_player.is_alive = self.player.hp > 0
         
         # 敵グループ
         enemies = create_enemy_group(floor_level)
@@ -216,8 +222,7 @@ class BattleHandler:
         self.battle_active = True
         self.battle_result = None  # None, "victory", "defeat"
         
-        # ダメージ計算
-        self.chain_damage_multiplier = 1.0
+        # ダメージ計算はPlayerData.chain_damage_multiplierを使用
         
         # 報酬システム
         self.reward_generator = RewardGenerator()
@@ -243,6 +248,33 @@ class BattleHandler:
         enemy_names = [e.get_display_name() for e in self.enemy_group.enemies]
         logger.info(f"Battle started: Floor {floor_level} vs {', '.join(enemy_names)}")
     
+    def _sync_player_hp(self):
+        """PlayerDataとbattle_playerのHPを同期"""
+        self.player.hp = self.battle_player.current_hp
+        self.battle_player.max_hp = self.player.max_hp
+        
+        # 死亡状態を確認
+        if self.player.hp <= 0:
+            self.battle_player.is_alive = False
+            self.player.hp = 0
+        else:
+            self.battle_player.is_alive = True
+    
+    def _finalize_battle_stats(self):
+        """battle_playerの統計をPlayerData.statsに反映"""
+        # 戦闘終了時にHPを同期
+        self._sync_player_hp()
+        
+        # 戦闘結果をPlayerDataに記録
+        won = (self.battle_result == "victory")
+        self.player.update_combat_stats(
+            damage_dealt=0,  # すでに連鎖ごとに加算済み
+            chains_made=0,   # すでに連鎖ごとに加算済み  
+            won=won
+        )
+        
+        logger.info(f"Battle finalized: {self.battle_result}, HP: {self.player.hp}/{self.player.max_hp}")
+    
     def on_enter(self, previous_state):
         """戦闘開始"""
         self.puyo_handler.on_enter(previous_state)
@@ -258,8 +290,8 @@ class BattleHandler:
         if not self.battle_active:
             return
         
-        # プレイヤー更新
-        self.player.update(dt)
+        # プレイヤー更新（戦闘固有の機能のみ）
+        self.battle_player.update(dt)
         
         # ぷよぷよシステム更新
         self.puyo_handler.update(dt)
@@ -273,7 +305,7 @@ class BattleHandler:
         self._check_chain_damage()
         
         # 敵グループの更新と攻撃
-        enemy_actions = self.enemy_group.update(dt, self.player.current_hp)
+        enemy_actions = self.enemy_group.update(dt, self.player.hp)
         for enemy, action in enemy_actions:
             self._execute_enemy_action(enemy, action)
         
@@ -304,8 +336,9 @@ class BattleHandler:
             # スコアをダメージに変換
             base_damage = max(1, last_score // CHAIN_SCORE_BASE)  # 最低1ダメージ保証
             
-            # プレイヤーの攻撃力修正を適用
-            modified_damage = int(base_damage * self.player.attack_multiplier * self.chain_damage_multiplier)
+            # プレイヤーの攻撃力修正を適用（PlayerData + battle_playerのバフを組み合わせ）
+            total_attack_multiplier = self.battle_player.attack_multiplier * self.player.chain_damage_multiplier
+            modified_damage = int(base_damage * total_attack_multiplier)
             
             # 特殊ぷよによる連鎖の処理
             chain_positions = self.puyo_handler.puyo_grid.get_last_chain_positions()
@@ -334,8 +367,8 @@ class BattleHandler:
             target = self.enemy_group.get_selected_target()
             if target:
                 defeated = target.take_damage(modified_damage)
-                self.player.total_damage_dealt += modified_damage
-                self.player.total_chains_made += 1
+                self.player.stats.total_damage_dealt += modified_damage
+                self.player.stats.total_chains_made += 1
                 
                 # ダメージ数値表示
                 target_pos = self._get_enemy_display_position(target)
@@ -373,7 +406,14 @@ class BattleHandler:
                 final_damage = int(final_damage * (1 - reduction))
                 logger.info(f"Enemy attack reduced by curse: {action.damage} -> {final_damage}")
             
-            defeated, reflected_damage = self.player.take_damage(final_damage)
+            defeated, reflected_damage = self.battle_player.take_damage(final_damage)
+            
+            # HPを同期
+            self._sync_player_hp()
+            
+            # 死亡状態を確認
+            if self.player.hp <= 0:
+                defeated = True
             
             # 反射ダメージを敵に与える
             if reflected_damage > 0:
@@ -419,23 +459,24 @@ class BattleHandler:
         
         if effect_type == 'attack_buff':
             # バフぷよ：攻撃力上昇
-            self.player.apply_buff('attack_buff', power, duration)
+            self.battle_player.apply_buff('attack_buff', power, duration)
             
         elif effect_type == 'heal_player':
-            # 回復ぷよ：HP回復
-            self.player.heal(power)
+            # 回復ぷよ：HP回復（PlayerDataとbattle_player両方を更新）
+            healed = self.player.heal(power)
+            self._sync_player_hp()
             
         elif effect_type == 'damage_reduction':
             # シールドぷよ：ダメージ軽減シールド
-            self.player.apply_shield('damage_reduction', power, duration)
+            self.battle_player.apply_shield('damage_reduction', power, duration)
             
         elif effect_type == 'absorb_barrier':
             # 吸収シールドぷよ：ダメージを吸収してHP変換
-            self.player.apply_shield('absorb', power, duration)
+            self.battle_player.apply_shield('absorb', power, duration)
             
         elif effect_type == 'damage_reflect':
             # 反射ぷよ：ダメージ反射
-            self.player.apply_reflect(power, duration)
+            self.battle_player.apply_reflect(power, duration)
             
         elif effect_type == 'freeze_enemy':
             # 氷ぷよ：敵の行動遅延
@@ -508,7 +549,7 @@ class BattleHandler:
     def _return_to_dungeon_map(self):
         """ダンジョンマップに戻る"""
         try:
-            from ..dungeon.map_handler import DungeonMapHandler
+            from dungeon.map_handler import DungeonMapHandler
             
             # 戦闘勝利時：マップの進行状態を更新
             if self.battle_result == "victory" and hasattr(self.engine, 'persistent_dungeon_map') and self.engine.persistent_dungeon_map:
@@ -602,12 +643,14 @@ class BattleHandler:
         if not self.battle_active:
             return
         
-        if not self.player.is_alive:
+        if self.player.hp <= 0 or not self.battle_player.is_alive:
             self.battle_result = "defeat"
             self.battle_active = False
+            self._finalize_battle_stats()
         elif self.enemy_group.is_all_defeated():
             self.battle_result = "victory"
             self.battle_active = False
+            self._finalize_battle_stats()
             # 勝利時の報酬を生成
             self._generate_victory_rewards()
     
@@ -674,15 +717,15 @@ class BattleHandler:
         
         # 上部UIバーを描画
         # プレイヤーのダメージを受けた時のフラッシュ効果
-        if self.player.damage_flash_timer > 0:
+        if self.battle_player.damage_flash_timer > 0:
             self.top_ui_bar.trigger_damage_flash()
         
         logger.debug("Drawing top UI bar...")
         self.top_ui_bar.draw_top_bar(
             surface,
-            self.player.current_hp, self.player.max_hp,
-            3, 3,  # エネルギー（固定値）
-            150,   # ゴールド（固定値）
+            self.player.hp, self.player.max_hp,
+            self.player.energy, self.player.energy,  # エネルギー
+            self.player.gold,   # ゴールド
             self.floor_level
         )
         
@@ -690,8 +733,8 @@ class BattleHandler:
         self.puyo_handler.render(surface)
         
         # プレイヤーダメージフラッシュ
-        if self.player.damage_flash_timer > 0:
-            flash_alpha = int(128 * (self.player.damage_flash_timer / self.player.damage_flash_duration))
+        if self.battle_player.damage_flash_timer > 0:
+            flash_alpha = int(128 * (self.battle_player.damage_flash_timer / self.battle_player.damage_flash_duration))
             flash_surface = pygame.Surface((GRID_WIDTH * PUYO_SIZE, GRID_HEIGHT * PUYO_SIZE))
             flash_surface.set_alpha(flash_alpha)
             flash_surface.fill(Colors.RED)
@@ -827,7 +870,7 @@ class BattleHandler:
         
         # 統計データ
         stats = [
-            f"与えたダメージ: {self.player.total_damage_dealt}",
+            f"与えたダメージ: {self.player.stats.total_damage_dealt}",
             f"連鎖数: {self.puyo_handler.total_chains}",
             f"現在スコア: {self.puyo_handler.total_score}",
         ]
@@ -844,13 +887,13 @@ class BattleHandler:
         font_small = self.engine.fonts['small']
         
         # プレイヤーHP表示
-        player_hp_text = font_medium.render(f"Player HP: {self.player.current_hp}/{self.player.max_hp}", True, Colors.WHITE)
+        player_hp_text = font_medium.render(f"Player HP: {self.player.hp}/{self.player.max_hp}", True, Colors.WHITE)
         surface.blit(player_hp_text, (GRID_OFFSET_X, GRID_OFFSET_Y - 40))
         
         # プレイヤーHPバー
         hp_bar_width = 200
         hp_bar_height = 20
-        hp_ratio = self.player.current_hp / self.player.max_hp
+        hp_ratio = self.player.hp / self.player.max_hp
         
         # HPバー背景
         hp_bg_rect = pygame.Rect(GRID_OFFSET_X, GRID_OFFSET_Y - 20, hp_bar_width, hp_bar_height)
@@ -862,8 +905,8 @@ class BattleHandler:
         pygame.draw.rect(surface, hp_color, hp_fg_rect)
         
         # プレイヤーダメージフラッシュ
-        if self.player.damage_flash_timer > 0:
-            flash_alpha = int(128 * (self.player.damage_flash_timer / self.player.damage_flash_duration))
+        if self.battle_player.damage_flash_timer > 0:
+            flash_alpha = int(128 * (self.battle_player.damage_flash_timer / self.battle_player.damage_flash_duration))
             flash_surface = pygame.Surface((GRID_WIDTH * PUYO_SIZE, GRID_HEIGHT * PUYO_SIZE))
             flash_surface.set_alpha(flash_alpha)
             flash_surface.fill(Colors.RED)
@@ -878,7 +921,7 @@ class BattleHandler:
         stats_y = self.battle_ui_y + enemy_area_height + 20
         
         stats = [
-            f"与えたダメージ: {self.player.total_damage_dealt}",
+            f"与えたダメージ: {self.player.stats.total_damage_dealt}",
             f"連鎖数: {self.puyo_handler.total_chains}",
             f"現在スコア: {self.puyo_handler.total_score}",
         ]
@@ -1120,7 +1163,7 @@ class BattleHandler:
         
         # 統計表示
         stats = [
-            f"与えたダメージ: {self.player.total_damage_dealt}",
+            f"与えたダメージ: {self.player.stats.total_damage_dealt}",
             f"作った連鎖: {self.puyo_handler.total_chains}",
             f"最終スコア: {self.puyo_handler.total_score}",
         ]

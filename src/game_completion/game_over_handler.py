@@ -5,14 +5,18 @@
 
 import pygame
 from typing import Dict
-from ..core.state_handler import StateHandler
-from ..core.constants import GameState, Colors
-from ..core.game_engine import GameEngine
+from core.state_handler import StateHandler
+from core.constants import GameState, Colors
+from core.game_engine import GameEngine
 
 class GameOverHandler(StateHandler):
     def __init__(self, engine: GameEngine, death_cause: str = "戦闘で力尽きた"):
         super().__init__(engine)
         self.death_cause = death_cause
+        # フォント初期化（初期化されていない場合）
+        if not pygame.font.get_init():
+            pygame.font.init()
+            
         self.font_large = pygame.font.Font(None, 72)
         self.font_medium = pygame.font.Font(None, 48)
         self.font_small = pygame.font.Font(None, 32)
@@ -98,11 +102,11 @@ class GameOverHandler(StateHandler):
     def _restart_game(self):
         """ゲームを再開"""
         # プレイヤーデータをリセット
-        from ..core.player_data import PlayerData
+        from core.player_data import PlayerData
         self.engine.player = PlayerData()
         
         # ゲームデータをリセット
-        from ..core.game_engine import GameData
+        from core.game_engine import GameData
         self.engine.game_data = GameData()
         
         # ダンジョンマップをリセット
@@ -114,11 +118,11 @@ class GameOverHandler(StateHandler):
     def _return_to_menu(self):
         """メインメニューに戻る"""
         # プレイヤーデータをリセット
-        from ..core.player_data import PlayerData
+        from core.player_data import PlayerData
         self.engine.player = PlayerData()
         
         # ゲームデータをリセット
-        from ..core.game_engine import GameData
+        from core.game_engine import GameData
         self.engine.game_data = GameData()
         
         # ダンジョンマップをリセット

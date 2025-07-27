@@ -8,8 +8,8 @@ import logging
 from typing import Dict, List, Optional
 from enum import Enum
 
-from ..core.constants import *
-from ..core.game_engine import GameEngine
+from core.constants import *
+from core.game_engine import GameEngine
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +56,10 @@ class RestHandler:
         actions = []
         
         # HP回復は常に利用可能（満タンでない場合）
-        if self.engine.game_data.player_hp < self.engine.game_data.player_max_hp:
+        if self.engine.player.hp < self.engine.player.max_hp:
             heal_amount = min(
-                self.engine.game_data.player_max_hp - self.engine.game_data.player_hp,
-                self.engine.game_data.player_max_hp // 3  # 最大HPの1/3回復
+                self.engine.player.max_hp - self.engine.player.hp,
+                self.engine.player.max_hp // 3  # 最大HPの1/3回復
             )
             actions.append({
                 'type': RestAction.HEAL,
@@ -139,13 +139,13 @@ class RestHandler:
     def _execute_heal(self, action):
         """HP回復を実行"""
         heal_amount = action['heal_amount']
-        old_hp = self.engine.game_data.player_hp
-        self.engine.game_data.player_hp = min(
-            self.engine.game_data.player_max_hp,
-            self.engine.game_data.player_hp + heal_amount
+        old_hp = self.engine.player.hp
+        self.engine.player.hp = min(
+            self.engine.player.max_hp,
+            self.engine.player.hp + heal_amount
         )
-        self.heal_amount = self.engine.game_data.player_hp - old_hp
-        logger.info(f"Healed {self.heal_amount} HP: {old_hp} -> {self.engine.game_data.player_hp}")
+        self.heal_amount = self.engine.player.hp - old_hp
+        logger.info(f"Healed {self.heal_amount} HP: {old_hp} -> {self.engine.player.hp}")
     
     def _execute_upgrade(self, action):
         """能力強化を実行"""
@@ -153,13 +153,13 @@ class RestHandler:
         damage_bonus = action['damage_bonus']
         
         # 最大HP増加
-        self.engine.game_data.player_max_hp += hp_bonus
-        self.engine.game_data.player_hp += hp_bonus  # 現在HPも同じ分増加
+        self.engine.player.max_hp += hp_bonus
+        self.engine.player.hp += hp_bonus  # 現在HPも同じ分増加
         
-        # ダメージボーナス（ゲームデータに追加）
-        if not hasattr(self.engine.game_data, 'chain_damage_bonus'):
-            self.engine.game_data.chain_damage_bonus = 0
-        self.engine.game_data.chain_damage_bonus += damage_bonus
+        # ダメージボーナス（プレイヤーデータに追加）
+        if not hasattr(self.engine.player, 'chain_damage_bonus'):
+            self.engine.player.chain_damage_bonus = 0
+        self.engine.player.chain_damage_bonus += damage_bonus
         
         logger.info(f"Upgraded: +{hp_bonus} max HP, +{damage_bonus}% chain damage")
     
@@ -167,17 +167,17 @@ class RestHandler:
         """瞑想を実行"""
         energy_boost = action['energy_boost']
         
-        # エネルギーブースト効果（ゲームデータに追加）
-        if not hasattr(self.engine.game_data, 'energy_boost_remaining'):
-            self.engine.game_data.energy_boost_remaining = 0
-        self.engine.game_data.energy_boost_remaining += energy_boost
+        # エネルギーブースト効果（プレイヤーデータに追加）
+        if not hasattr(self.engine.player, 'energy_boost_remaining'):
+            self.engine.player.energy_boost_remaining = 0
+        self.engine.player.energy_boost_remaining += energy_boost
         
         logger.info(f"Meditated: +{energy_boost} energy boost for next battles")
     
     def _return_to_map(self):
         """ダンジョンマップに戻る"""
         try:
-            from ..dungeon.map_handler import DungeonMapHandler
+            from dungeon.map_handler import DungeonMapHandler
             
             # マップ進行処理
             if (hasattr(self.engine, 'persistent_dungeon_map') and self.engine.persistent_dungeon_map and 
@@ -335,7 +335,7 @@ class RestHandler:
         
         # 詳細情報
         if action['type'] == RestAction.UPGRADE:
-            detail_text = f"Max HP: {self.engine.game_data.player_max_hp} (+{action['hp_bonus']})"
+            detail_text = f"Max HP: {self.engine.player.max_hp} (+{action['hp_bonus']})"
             detail = font_medium.render(detail_text, True, Colors.WHITE)
             detail_rect = detail.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60))
             surface.blit(detail, detail_rect)

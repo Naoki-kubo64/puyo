@@ -7,7 +7,7 @@ import pygame
 import math
 from typing import Tuple
 from .enemy import EnemyType
-from ..core.constants import Colors
+from core.constants import Colors
 
 class EnemyRenderer:
     """敵の描画を担当するクラス"""

@@ -9,7 +9,7 @@ import logging
 import os
 from typing import Dict, List, Optional, Tuple
 
-from ..core.constants import *
+from core.constants import *
 from .dungeon_map import DungeonMap, DungeonNode, NodeType
 
 logger = logging.getLogger(__name__)

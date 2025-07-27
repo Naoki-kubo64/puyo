@@ -6,7 +6,7 @@
 import pygame
 import math
 from typing import Dict, Optional
-from ..core.constants import Colors
+from core.constants import Colors
 from .enemy import ActionType
 
 class EnemyIntentRenderer:

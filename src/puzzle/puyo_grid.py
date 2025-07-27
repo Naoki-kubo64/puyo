@@ -12,8 +12,8 @@ from typing import List, Optional, Set, Tuple, Dict
 from dataclasses import dataclass
 from copy import deepcopy
 
-from ..core.constants import *
-from ..core.sound_manager import play_se, SoundType
+from core.constants import *
+from core.sound_manager import play_se, SoundType
 
 logger = logging.getLogger(__name__)
 

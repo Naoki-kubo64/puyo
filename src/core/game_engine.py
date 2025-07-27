@@ -10,9 +10,9 @@ from typing import Dict, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
-from .constants import *
-from .sound_manager import get_sound_manager
-from .player_data import PlayerData
+from core.constants import *
+from core.sound_manager import get_sound_manager
+from core.player_data import PlayerData
 
 # ログ設定
 logging.basicConfig(level=LOG_LEVEL)
@@ -91,7 +91,7 @@ class GameEngine:
         self.player = PlayerData()
         
         # ゲーム終了条件管理
-        from ..game_completion.game_conditions import GameConditionManager
+        from game_completion.game_conditions import GameConditionManager
         self.condition_manager = GameConditionManager(self)
         
         # 状態管理システム

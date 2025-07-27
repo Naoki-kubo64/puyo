@@ -9,8 +9,8 @@ from typing import Dict, List, Optional, Union
 from enum import Enum
 from dataclasses import dataclass
 
-from ..core.constants import *
-from ..inventory.player_inventory import create_item, ItemRarity
+from core.constants import *
+from inventory.player_inventory import create_item, ItemRarity
 import pygame.font
 
 logger = logging.getLogger(__name__)
@@ -297,7 +297,7 @@ class RewardSelectionHandler:
     def _return_to_dungeon_map(self):
         """ダンジョンマップに戻る"""
         try:
-            from ..dungeon.map_handler import DungeonMapHandler
+            from dungeon.map_handler import DungeonMapHandler
             
             # 報酬選択完了時：戦闘勝利によるマップ進行処理を実行
             if (hasattr(self.engine, 'persistent_dungeon_map') and self.engine.persistent_dungeon_map and 

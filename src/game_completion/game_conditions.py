@@ -4,8 +4,8 @@
 """
 
 import logging
-from ..core.game_engine import GameEngine
-from ..core.constants import GameState
+from core.game_engine import GameEngine
+from core.constants import GameState
 
 logger = logging.getLogger(__name__)
 

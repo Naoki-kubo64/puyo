@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 import logging
 
-from .constants import PLAYER_INITIAL_HP, PLAYER_MAX_HP
-from ..inventory.player_inventory import PlayerInventory
+from core.constants import PLAYER_INITIAL_HP, PLAYER_MAX_HP
+from inventory.player_inventory import PlayerInventory
 
 logger = logging.getLogger(__name__)
 

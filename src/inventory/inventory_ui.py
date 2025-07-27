@@ -1,8 +1,8 @@
 import pygame
 from typing import List, Optional
-from ..core.state_handler import StateHandler
-from ..core.constants import GameState, Colors
-from ..core.game_engine import GameEngine
+from core.state_handler import StateHandler
+from core.constants import GameState, Colors
+from core.game_engine import GameEngine
 from .player_inventory import PlayerInventory, Item, ItemType, ItemRarity
 
 class InventoryUI(StateHandler):
@@ -87,7 +87,8 @@ class InventoryUI(StateHandler):
                         used_item = self.inventory.use_consumable(item.id)
                         if used_item:
                             self.engine.player.heal(used_item.effect_value)
-                            self._show_message(f"{used_item.name}を使用！HP{used_item.effect_value}回復")\n                elif "energy" in item.id:
+                            self._show_message(f"{used_item.name}を使用！HP{used_item.effect_value}回復")
+                elif "energy" in item.id:
                     # エネルギーポーション
                     used_item = self.inventory.use_consumable(item.id)
                     if used_item:
