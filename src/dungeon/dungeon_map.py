@@ -247,34 +247,52 @@ class DungeonMap:
         
         return True
     
+    def _check_recent_elite_battles(self, current_floor: int) -> bool:
+        """最近のエリート戦をチェック（連続出現防止）"""
+        # 前3フロア以内にエリート戦があったかチェック
+        for check_floor in range(max(0, current_floor - 3), current_floor):
+            if check_floor in self.floor_nodes:
+                for node in self.floor_nodes[check_floor]:
+                    if node.node_type == NodeType.ELITE:
+                        logger.debug(f"Recent elite found at floor {check_floor}, blocking elite at floor {current_floor}")
+                        return True
+        return False
+    
     def _get_node_weights(self, available_types: List[NodeType], floor: int = 0) -> List[int]:
         """ノードタイプの重みを取得（フロアに応じて動的調整）"""
         weights = []
         
-        # 後半フロアでエリートの出現率を段階的に上げる
-        elite_base_weight = 8
-        if floor >= 10:  # 11フロア目以降
-            elite_weight = elite_base_weight + 6  # 14
-        elif floor >= 7:   # 8フロア目以降
-            elite_weight = elite_base_weight + 4  # 12
-        elif floor >= 4:   # 5フロア目以降
-            elite_weight = elite_base_weight + 2  # 10
+        # エリートの出現率を大幅に削減し、連続出現をチェック
+        elite_base_weight = 2  # 基本重みを更に削減（8→3→2）
+        
+        # 連続エリート出現をチェック
+        recent_elite = self._check_recent_elite_battles(floor)
+        if recent_elite:
+            elite_weight = 0  # 最近エリートがあった場合は出現させない
         else:
-            elite_weight = elite_base_weight  # 8
+            # 後半フロアでエリートの出現率を段階的に上げる（控えめに）
+            if floor >= 12:  # 13フロア目以降
+                elite_weight = elite_base_weight + 2  # 4
+            elif floor >= 8:   # 9フロア目以降
+                elite_weight = elite_base_weight + 1  # 3
+            elif floor >= 5:   # 6フロア目以降
+                elite_weight = elite_base_weight + 1  # 3
+            else:
+                elite_weight = elite_base_weight  # 2
         
         for node_type in available_types:
             if node_type == NodeType.BATTLE:
-                weights.append(50)
+                weights.append(50)  # 通常戦闘の重みを増加
             elif node_type == NodeType.TREASURE:
                 weights.append(25)
             elif node_type == NodeType.EVENT:
-                weights.append(15)
+                weights.append(20)
             elif node_type == NodeType.SHOP:
-                weights.append(7)
-            elif node_type == NodeType.REST:
                 weights.append(8)
+            elif node_type == NodeType.REST:
+                weights.append(12)  # 休憩所を少し増やす
             elif node_type == NodeType.ELITE:
-                weights.append(elite_weight)  # フロアに応じて動的に調整
+                weights.append(elite_weight)  # フロアに応じて動的に調整（連続出現防止付き）
             else:
                 weights.append(5)
         
