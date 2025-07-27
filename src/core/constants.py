@@ -207,6 +207,10 @@ class GameState(Enum):
     REAL_BATTLE = "real_battle"  # 新しい戦闘状態
     REWARD_SELECT = "reward_select"  # 報酬選択画面
     DUNGEON_MAP = "dungeon_map"  # ダンジョンマップ画面
+    REST = "rest"  # 休憩所画面
+    SHOP = "shop"  # ショップ画面
+    EVENT = "event"  # ランダムイベント画面
+    TREASURE = "treasure"  # 宝箱画面
     CARD_SELECT = "card_select"
     GAME_OVER = "game_over"
     VICTORY = "victory"

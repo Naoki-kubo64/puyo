@@ -261,10 +261,39 @@ class DungeonMapHandler:
         logger.info("Opening treasure chest")
         self.transition_pending = True
         
-        # 宝箱報酬の生成と表示
-        # TODO: 宝箱報酬システムとの連携
-        logger.info("Treasure opened - returning to map")
+        try:
+            from ..treasure.treasure_handler import TreasureHandler
+            
+            # 宝箱ハンドラーを作成
+            treasure_handler = TreasureHandler(self.engine, current_node=node)
+            
+            # 宝箱状態に変更
+            self.engine.register_state_handler(GameState.TREASURE, treasure_handler)
+            self.engine.change_state(GameState.TREASURE)
+            
+            logger.info("Successfully transitioned to treasure chest")
+            
+        except Exception as e:
+            logger.error(f"Failed to transition to treasure chest: {e}")
+            # エラー時は簡易宝箱シミュレーション
+            self._simulate_treasure()
+        
         self.transition_pending = False
+    
+    def _simulate_treasure(self):
+        """宝箱シミュレーション（フォールバック）"""
+        # 簡易報酬獲得
+        if not hasattr(self.engine.game_data, 'gold'):
+            self.engine.game_data.gold = 0
+        bonus_gold = random.randint(50, 100)
+        self.engine.game_data.gold += bonus_gold
+        
+        # HP回復
+        hp_bonus = random.randint(10, 20)
+        self.engine.game_data.player_max_hp += hp_bonus
+        self.engine.game_data.player_hp += hp_bonus
+        
+        logger.info(f"Treasure simulation: gained {bonus_gold} gold and {hp_bonus} max HP")
     
     def _transition_to_event(self, node: DungeonNode):
         """イベントへの遷移"""
@@ -281,20 +310,69 @@ class DungeonMapHandler:
         logger.info("Entering rest site")
         self.transition_pending = True
         
-        # HP回復とアップグレード選択
-        # TODO: 休憩所システムとの連携
-        logger.info("Rest completed - returning to map")
+        try:
+            from ..rest.rest_handler import RestHandler
+            
+            # 休憩所ハンドラーを作成
+            rest_handler = RestHandler(self.engine, current_node=node)
+            
+            # 休憩所状態に変更
+            self.engine.register_state_handler(GameState.REST, rest_handler)
+            self.engine.change_state(GameState.REST)
+            
+            logger.info("Successfully transitioned to rest area")
+            
+        except Exception as e:
+            logger.error(f"Failed to transition to rest area: {e}")
+            # エラー時は簡易休憩所シミュレーション
+            self._simulate_rest()
+        
         self.transition_pending = False
+    
+    def _simulate_rest(self):
+        """休憩所シミュレーション（フォールバック）"""
+        # 簡易HP回復
+        heal_amount = self.engine.game_data.player_max_hp // 3
+        old_hp = self.engine.game_data.player_hp
+        self.engine.game_data.player_hp = min(
+            self.engine.game_data.player_max_hp,
+            self.engine.game_data.player_hp + heal_amount
+        )
+        actual_heal = self.engine.game_data.player_hp - old_hp
+        logger.info(f"Rest simulation: healed {actual_heal} HP")
     
     def _transition_to_shop(self, node: DungeonNode):
         """ショップへの遷移"""
         logger.info("Entering shop")
         self.transition_pending = True
         
-        # ショップUIの表示
-        # TODO: ショップシステムとの連携
-        logger.info("Shop visit completed - returning to map")
+        try:
+            from ..shop.shop_handler import ShopHandler
+            
+            # ショップハンドラーを作成
+            shop_handler = ShopHandler(self.engine, current_node=node)
+            
+            # ショップ状態に変更
+            self.engine.register_state_handler(GameState.SHOP, shop_handler)
+            self.engine.change_state(GameState.SHOP)
+            
+            logger.info("Successfully transitioned to shop")
+            
+        except Exception as e:
+            logger.error(f"Failed to transition to shop: {e}")
+            # エラー時は簡易ショップシミュレーション
+            self._simulate_shop()
+        
         self.transition_pending = False
+    
+    def _simulate_shop(self):
+        """ショップシミュレーション（フォールバック）"""
+        # 簡易ゴールド獲得
+        if not hasattr(self.engine.game_data, 'gold'):
+            self.engine.game_data.gold = 0
+        bonus_gold = random.randint(20, 50)
+        self.engine.game_data.gold += bonus_gold
+        logger.info(f"Shop simulation: gained {bonus_gold} gold")
     
     def _initialize_starting_position(self):
         """開始位置を初期化"""
