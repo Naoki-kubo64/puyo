@@ -12,6 +12,13 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 
+class RouteType(Enum):
+    """ルートの難易度タイプ"""
+    EASY = "easy"       # 簡単・報酬少なめ
+    MEDIUM = "medium"   # 中程度・報酬普通  
+    HARD = "hard"       # 難しい・報酬多め
+
+
 class NodeType(Enum):
     """ダンジョンノードタイプ"""
     BATTLE = "battle"         # 戦闘
@@ -40,6 +47,7 @@ class DungeonNode:
     # 報酬・敵情報
     enemy_type: Optional[str] = None
     reward_seed: Optional[int] = None
+    route_type: Optional[RouteType] = None  # このノードが属するルートタイプ
     
     def __post_init__(self):
         """初期化後処理"""
@@ -79,10 +87,10 @@ class DungeonMap:
         # 接続を生成
         self._generate_connections()
         
-        # エリートの最低出現保証
-        self._ensure_minimum_elite_spawns()
+        # ランダムエリートを事前に除去（ルート調整前に）
+        self._remove_random_elites()
         
-        # 全ルートでエリート必須の保証
+        # 全ルートでエリート必須の保証（バランス調整版）
         self._ensure_elite_on_all_routes()
         
         # すべてのノードを最初は選択不可にする
@@ -312,35 +320,111 @@ class DungeonMap:
                     logger.info(f"Added guaranteed elite at floor {floor}: {old_id} -> {new_id}")
                     break
     
+    def _remove_random_elites(self):
+        """ランダム生成されたエリートを除去して、計画的配置に備える"""
+        for node in self.nodes.values():
+            if node.node_type == NodeType.ELITE:
+                # エリートを通常戦闘に戻す
+                node.node_type = NodeType.BATTLE
+                node.enemy_type = self._assign_enemy_type(NodeType.BATTLE, node.floor)
+                logger.debug(f"Removed random elite at {node.node_id}")
+    
     def _ensure_elite_on_all_routes(self):
-        """全ルートでエリートとの戦闘を保証"""
-        logger.info("Ensuring elites on all possible routes with bottleneck strategy")
+        """全ルートでエリートとの戦闘を保証（バランス調整版）"""
+        logger.info("Creating balanced route types with different difficulty levels")
         
-        # ボトルネック戦略：全ルートが通る必須フロアにエリートを配置
-        mandatory_elite_floors = [6, 8, 10]  # フロア6, 8, 10に必ずエリートを配置
+        # 3つのルートタイプを開始ノードに割り当て
+        start_nodes = self.floor_nodes.get(0, [])
+        route_types = [RouteType.EASY, RouteType.MEDIUM, RouteType.HARD]
         
-        for floor in mandatory_elite_floors:
-            if floor in self.floor_nodes:
-                floor_nodes = self.floor_nodes[floor]
-                battle_nodes = [node for node in floor_nodes if node.node_type == NodeType.BATTLE]
+        for i, start_node in enumerate(start_nodes):
+            if i < len(route_types):
+                route_type = route_types[i]
+                start_node.route_type = route_type
+                logger.info(f"Assigned route type {route_type.value} to start node {start_node.node_id}")
                 
-                if battle_nodes:
-                    # 全ての戦闘ノードをエリートに変換（このフロアを通るすべてのルートがエリートと遭遇）
-                    for battle_node in battle_nodes:
-                        self._convert_battle_to_elite(battle_node)
-                        logger.info(f"Converted battle to elite at floor {floor}: {battle_node.node_id}")
-                
-                # 戦闘ノードがない場合、他のノードタイプを戦闘に変換してからエリートに
-                elif floor_nodes:
-                    # 宝箱やイベントノードを戦闘ノードに変換してからエリートに
-                    for node in floor_nodes:
-                        if node.node_type in [NodeType.TREASURE, NodeType.EVENT]:
-                            # 一旦戦闘ノードに変換してからエリートに
-                            node.node_type = NodeType.BATTLE
-                            node.enemy_type = self._assign_enemy_type(NodeType.BATTLE, floor)
-                            self._convert_battle_to_elite(node)
-                            logger.info(f"Converted {node.node_type.value} to elite at floor {floor}: {node.node_id}")
-                            break  # 1つだけ変換
+                # ルートタイプに応じてエリート配置を設定
+                self._setup_route_difficulty(start_node, route_type)
+    
+    def _setup_route_difficulty(self, start_node: DungeonNode, route_type: RouteType):
+        """ルートタイプに応じた難易度設定"""
+        route_path = self._trace_primary_route(start_node)
+        
+        # ルートタイプに応じてノードを調整
+        for node in route_path:
+            node.route_type = route_type
+        
+        if route_type == RouteType.EASY:
+            # 簡単ルート：エリート1体のみ（中盤）、宝箱・休憩所多め
+            self._create_easy_route(route_path)
+        elif route_type == RouteType.MEDIUM:
+            # 中程度ルート：エリート1-2体、バランス型
+            self._create_medium_route(route_path)
+        elif route_type == RouteType.HARD:
+            # 難しいルート：エリート2-3体、高報酬
+            self._create_hard_route(route_path)
+    
+    def _create_easy_route(self, route_path: List[DungeonNode]):
+        """簡単ルート：エリート1体のみ（フロア7）、サポートノード多め"""
+        elite_placed = False
+        
+        for node in route_path:
+            if node.floor == 7 and not elite_placed and node.node_type == NodeType.BATTLE:
+                # フロア7に確実に1体配置
+                self._convert_battle_to_elite(node)
+                elite_placed = True
+                logger.info(f"Easy route: placed elite at {node.node_id}")
+            elif node.node_type == NodeType.BATTLE and node.floor <= 5 and random.random() < 0.4:
+                # 前半の戦闘の一部を宝箱に変換（報酬アップ）
+                node.node_type = NodeType.TREASURE
+                node.enemy_type = None
+                logger.debug(f"Easy route: converted battle to treasure at {node.node_id}")
+    
+    def _create_medium_route(self, route_path: List[DungeonNode]):
+        """中程度ルート：エリート1体（フロア9）、標準的なバランス"""
+        elite_placed = False
+        
+        for node in route_path:
+            if node.floor == 9 and not elite_placed and node.node_type == NodeType.BATTLE:
+                # フロア9に確実に1体配置
+                self._convert_battle_to_elite(node)
+                elite_placed = True
+                logger.info(f"Medium route: placed elite at {node.node_id}")
+    
+    def _create_hard_route(self, route_path: List[DungeonNode]):
+        """難しいルート：エリート2体（フロア5と11）、高報酬"""
+        elite_count = 0
+        elite_floors = [5, 11]  # 確実に2体配置
+        
+        # まず戦闘ノードがあるかフロアをチェック
+        available_battle_floors = {}
+        for node in route_path:
+            if node.node_type == NodeType.BATTLE:
+                if node.floor not in available_battle_floors:
+                    available_battle_floors[node.floor] = []
+                available_battle_floors[node.floor].append(node)
+        
+        # 指定フロアで戦闘ノードをエリートに変換
+        for floor in elite_floors:
+            if floor in available_battle_floors and elite_count < 2:
+                chosen_node = available_battle_floors[floor][0]  # 最初の戦闘ノードを選択
+                self._convert_battle_to_elite(chosen_node)
+                elite_count += 1
+                logger.info(f"Hard route: placed elite {elite_count} at {chosen_node.node_id}")
+        
+        # まだ2体に達していない場合、他のフロアで戦闘ノードを探す
+        if elite_count < 2:
+            for floor in [4, 6, 7, 10, 12]:  # 代替フロア
+                if floor in available_battle_floors and elite_count < 2:
+                    chosen_node = available_battle_floors[floor][0]
+                    self._convert_battle_to_elite(chosen_node)
+                    elite_count += 1
+                    logger.info(f"Hard route: placed additional elite {elite_count} at {chosen_node.node_id}")
+        
+        # 宝箱の品質向上
+        for node in route_path:
+            if node.node_type == NodeType.TREASURE and random.random() < 0.3:
+                logger.debug(f"Hard route: enhanced treasure at {node.node_id}")
     
     def _find_reachable_elites_from_node(self, start_node: DungeonNode) -> List[DungeonNode]:
         """指定ノードから到達可能なエリートノードを見つける"""
@@ -761,6 +845,28 @@ class DungeonMap:
     def get_nodes_by_floor(self, floor: int) -> List[DungeonNode]:
         """指定フロアのノードを取得"""
         return self.floor_nodes.get(floor, [])
+    
+    def get_route_info(self) -> Dict[RouteType, Dict]:
+        """各ルートの情報を取得"""
+        route_info = {}
+        start_nodes = self.floor_nodes.get(0, [])
+        
+        for start_node in start_nodes:
+            if start_node.route_type:
+                route_path = self._trace_primary_route(start_node)
+                elite_count = sum(1 for node in route_path if node.node_type == NodeType.ELITE)
+                treasure_count = sum(1 for node in route_path if node.node_type == NodeType.TREASURE)
+                rest_count = sum(1 for node in route_path if node.node_type == NodeType.REST)
+                
+                route_info[start_node.route_type] = {
+                    'start_node': start_node.node_id,
+                    'elite_count': elite_count,
+                    'treasure_count': treasure_count,
+                    'rest_count': rest_count,
+                    'difficulty': start_node.route_type.value
+                }
+        
+        return route_info
 
 
 if __name__ == "__main__":
