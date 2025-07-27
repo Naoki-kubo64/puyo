@@ -82,6 +82,9 @@ class DungeonMap:
         # エリートの最低出現保証
         self._ensure_minimum_elite_spawns()
         
+        # 全ルートでエリート必須の保証
+        self._ensure_elite_on_all_routes()
+        
         # すべてのノードを最初は選択不可にする
         for node in self.nodes.values():
             node.available = False
@@ -308,6 +311,131 @@ class DungeonMap:
                     
                     logger.info(f"Added guaranteed elite at floor {floor}: {old_id} -> {new_id}")
                     break
+    
+    def _ensure_elite_on_all_routes(self):
+        """全ルートでエリートとの戦闘を保証"""
+        logger.info("Ensuring elites on all possible routes with bottleneck strategy")
+        
+        # ボトルネック戦略：全ルートが通る必須フロアにエリートを配置
+        mandatory_elite_floors = [6, 8, 10]  # フロア6, 8, 10に必ずエリートを配置
+        
+        for floor in mandatory_elite_floors:
+            if floor in self.floor_nodes:
+                floor_nodes = self.floor_nodes[floor]
+                battle_nodes = [node for node in floor_nodes if node.node_type == NodeType.BATTLE]
+                
+                if battle_nodes:
+                    # 全ての戦闘ノードをエリートに変換（このフロアを通るすべてのルートがエリートと遭遇）
+                    for battle_node in battle_nodes:
+                        self._convert_battle_to_elite(battle_node)
+                        logger.info(f"Converted battle to elite at floor {floor}: {battle_node.node_id}")
+                
+                # 戦闘ノードがない場合、他のノードタイプを戦闘に変換してからエリートに
+                elif floor_nodes:
+                    # 宝箱やイベントノードを戦闘ノードに変換してからエリートに
+                    for node in floor_nodes:
+                        if node.node_type in [NodeType.TREASURE, NodeType.EVENT]:
+                            # 一旦戦闘ノードに変換してからエリートに
+                            node.node_type = NodeType.BATTLE
+                            node.enemy_type = self._assign_enemy_type(NodeType.BATTLE, floor)
+                            self._convert_battle_to_elite(node)
+                            logger.info(f"Converted {node.node_type.value} to elite at floor {floor}: {node.node_id}")
+                            break  # 1つだけ変換
+    
+    def _find_reachable_elites_from_node(self, start_node: DungeonNode) -> List[DungeonNode]:
+        """指定ノードから到達可能なエリートノードを見つける"""
+        visited = set()
+        reachable_elites = []
+        
+        def dfs_find_elites(current_node):
+            if current_node.node_id in visited:
+                return
+            visited.add(current_node.node_id)
+            
+            # 現在のノードがエリートなら追加
+            if current_node.node_type == NodeType.ELITE:
+                reachable_elites.append(current_node)
+            
+            # 接続先を探索
+            for connection_id in current_node.connections:
+                if connection_id in self.nodes:
+                    next_node = self.nodes[connection_id]
+                    dfs_find_elites(next_node)
+        
+        dfs_find_elites(start_node)
+        return reachable_elites
+    
+    def _add_elite_to_route(self, start_node: DungeonNode):
+        """指定ルートにエリートを追加"""
+        # このルートの主要パスを特定
+        route_path = self._trace_primary_route(start_node)
+        
+        # 中間フロア（4-9）で戦闘ノードをエリートに変換
+        for floor in range(4, 10):
+            floor_nodes_in_route = [node for node in route_path if node.floor == floor]
+            
+            # このフロアのルート上の戦闘ノードを探す
+            battle_nodes_in_route = [node for node in floor_nodes_in_route 
+                                   if node.node_type == NodeType.BATTLE]
+            
+            if battle_nodes_in_route:
+                # 最初の戦闘ノードをエリートに変換
+                chosen_node = battle_nodes_in_route[0]
+                self._convert_battle_to_elite(chosen_node)
+                logger.info(f"Added elite to route from {start_node.node_id} at floor {floor}: {chosen_node.node_id}")
+                break
+    
+    def _trace_primary_route(self, start_node: DungeonNode) -> List[DungeonNode]:
+        """開始ノードからの主要ルートをトレース"""
+        route = []
+        current_node = start_node
+        visited = set()
+        
+        while current_node and current_node.node_id not in visited:
+            route.append(current_node)
+            visited.add(current_node.node_id)
+            
+            # 次のノードを選択（真っ直ぐ進むものを優先）
+            next_node = None
+            min_x_diff = float('inf')
+            
+            for connection_id in current_node.connections:
+                if connection_id in self.nodes:
+                    candidate = self.nodes[connection_id]
+                    x_diff = abs(candidate.x - current_node.x)
+                    
+                    # より真っ直ぐなパスを優先
+                    if x_diff < min_x_diff:
+                        min_x_diff = x_diff
+                        next_node = candidate
+            
+            current_node = next_node
+        
+        return route
+    
+    def _convert_battle_to_elite(self, node: DungeonNode):
+        """戦闘ノードをエリートノードに変換"""
+        if node.node_type != NodeType.BATTLE:
+            return
+        
+        old_id = node.node_id
+        node.node_type = NodeType.ELITE
+        node.enemy_type = self._assign_enemy_type(NodeType.ELITE, node.floor)
+        
+        # ノードIDを更新
+        new_id = f"elite_{node.floor}_{node.x}"
+        node.node_id = new_id
+        
+        # ノード辞書のキーを更新
+        if old_id in self.nodes:
+            del self.nodes[old_id]
+            self.nodes[new_id] = node
+        
+        # 他のノードの接続情報を更新
+        for other_node in self.nodes.values():
+            if old_id in other_node.connections:
+                other_node.connections = [new_id if conn_id == old_id else conn_id 
+                                        for conn_id in other_node.connections]
     
     def _get_node_weights(self, available_types: List[NodeType], floor: int = 0) -> List[int]:
         """ノードタイプの重みを取得（フロアに応じて動的調整）"""

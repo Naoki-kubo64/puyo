@@ -328,7 +328,7 @@ class RewardSelectionHandler:
         font_small = self.engine.fonts['small']
         
         title_str = "報酬を選択"
-        title_font = get_appropriate_font(self.engine.fonts, title_str, 'title')
+        title_font = font_title
         title_text = title_font.render(title_str, True, Colors.WHITE)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 100))
         surface.blit(title_text, title_rect)
