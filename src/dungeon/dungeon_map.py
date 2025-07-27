@@ -79,6 +79,9 @@ class DungeonMap:
         # 接続を生成
         self._generate_connections()
         
+        # エリートの最低出現保証
+        self._ensure_minimum_elite_spawns()
+        
         # すべてのノードを最初は選択不可にする
         for node in self.nodes.values():
             node.available = False
@@ -257,6 +260,54 @@ class DungeonMap:
                         logger.debug(f"Recent elite found at floor {check_floor}, blocking elite at floor {current_floor}")
                         return True
         return False
+    
+    def _ensure_minimum_elite_spawns(self):
+        """エリートの最低出現回数を保証（1ルート1回以上）"""
+        # 現在のエリート数をチェック
+        total_elites = 0
+        elite_floors = []
+        
+        for floor in range(2, self.total_floors - 1):  # フロア2〜13のみ対象
+            floor_nodes = self.floor_nodes.get(floor, [])
+            for node in floor_nodes:
+                if node.node_type == NodeType.ELITE:
+                    total_elites += 1
+                    elite_floors.append(floor)
+        
+        logger.info(f"Current elite count: {total_elites}, on floors: {elite_floors}")
+        
+        # エリートが0個の場合、強制的に1個追加
+        if total_elites == 0:
+            # 中間フロア（5-10）からランダムに選択して1つを戦闘→エリートに変更
+            candidate_floors = list(range(5, 11))  # フロア5-10
+            
+            for floor in candidate_floors:
+                floor_nodes = self.floor_nodes.get(floor, [])
+                battle_nodes = [node for node in floor_nodes if node.node_type == NodeType.BATTLE]
+                
+                if battle_nodes:
+                    # 最初の戦闘ノードをエリートに変更
+                    chosen_node = battle_nodes[0]
+                    chosen_node.node_type = NodeType.ELITE
+                    chosen_node.enemy_type = self._assign_enemy_type(NodeType.ELITE, floor)
+                    # ノードIDも更新
+                    old_id = chosen_node.node_id
+                    new_id = f"elite_{floor}_{chosen_node.x}"
+                    chosen_node.node_id = new_id
+                    
+                    # ノード辞書のキーも更新
+                    if old_id in self.nodes:
+                        del self.nodes[old_id]
+                        self.nodes[new_id] = chosen_node
+                    
+                    # 他のノードの接続情報も更新
+                    for other_node in self.nodes.values():
+                        if old_id in other_node.connections:
+                            other_node.connections = [new_id if conn_id == old_id else conn_id 
+                                                    for conn_id in other_node.connections]
+                    
+                    logger.info(f"Added guaranteed elite at floor {floor}: {old_id} -> {new_id}")
+                    break
     
     def _get_node_weights(self, available_types: List[NodeType], floor: int = 0) -> List[int]:
         """ノードタイプの重みを取得（フロアに応じて動的調整）"""
