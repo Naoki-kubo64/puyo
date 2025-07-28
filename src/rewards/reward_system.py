@@ -22,8 +22,9 @@ class RewardType(Enum):
     POTION = "potion"               # ポーション
     ARTIFACT = "artifact"           # 装飾品
     HP_UPGRADE = "hp_upgrade"       # 最大HP増加
-    ENERGY_UPGRADE = "energy_upgrade"  # エネルギー増加
+    ENERGY_UPGRADE = "energy_upgrade"  # エネルギー増加（削除済み）
     CHAIN_UPGRADE = "chain_upgrade"    # 連鎖ダメージアップ
+    SPECIAL_PUYO_BOOST = "special_puyo_boost"  # 特殊ぷよ出現率アップ
 
 
 @dataclass
@@ -111,7 +112,7 @@ class RewardGenerator:
             (RewardType.ARTIFACT, 0.25),
             (RewardType.HP_UPGRADE, 0.15),
             (RewardType.CHAIN_UPGRADE, 0.15),
-            (RewardType.ENERGY_UPGRADE, 0.05),
+            (RewardType.SPECIAL_PUYO_BOOST, 0.05),
         ]
         
         # ボス戦では装飾品の確率アップ
@@ -121,7 +122,7 @@ class RewardGenerator:
                 (RewardType.POTION, 0.25),
                 (RewardType.HP_UPGRADE, 0.15),
                 (RewardType.CHAIN_UPGRADE, 0.08),
-                (RewardType.ENERGY_UPGRADE, 0.02),
+                (RewardType.SPECIAL_PUYO_BOOST, 0.02),
             ]
         
         # 報酬選択肢を生成
@@ -211,11 +212,16 @@ class RewardGenerator:
             )
         
         elif reward_type == RewardType.ENERGY_UPGRADE:
+            # エネルギーシステムは削除済み - 何も返さない
+            return None
+            
+        elif reward_type == RewardType.SPECIAL_PUYO_BOOST:
+            boost_amount = random.randint(50, 100)  # 50-100%の出現率アップ
             return Reward(
-                reward_type=RewardType.ENERGY_UPGRADE,
-                value=1,
-                name="最大エネルギー+1",
-                description="戦闘で使えるエネルギーが増加",
+                reward_type=RewardType.SPECIAL_PUYO_BOOST,
+                value=boost_amount,
+                name=f"特殊ぷよ率+{boost_amount}%",
+                description="特殊ぷよの出現確率が永続的に上昇",
                 rarity=ItemRarity.RARE
             )
         
@@ -451,6 +457,28 @@ class RewardSelectionHandler:
             
             # HP増加量
             value_text = font_medium.render(f"+{reward.value}", True, Colors.RED)
+            value_rect = value_text.get_rect(center=(card_rect.centerx, icon_y + 60))
+            surface.blit(value_text, value_rect)
+        
+        elif reward.reward_type == RewardType.SPECIAL_PUYO_BOOST:
+            # 特殊ぷよアイコン
+            icon_text = font_medium.render("⭐", True, Colors.YELLOW)
+            icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
+            surface.blit(icon_text, icon_rect)
+            
+            # 出現率増加量
+            value_text = font_medium.render(f"+{reward.value}%", True, Colors.YELLOW)
+            value_rect = value_text.get_rect(center=(card_rect.centerx, icon_y + 60))
+            surface.blit(value_text, value_rect)
+        
+        elif reward.reward_type == RewardType.CHAIN_UPGRADE:
+            # 連鎖アイコン
+            icon_text = font_medium.render("🔗", True, Colors.PURPLE)
+            icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
+            surface.blit(icon_text, icon_rect)
+            
+            # ダメージ増加量
+            value_text = font_medium.render(f"+{reward.value}%", True, Colors.PURPLE)
             value_rect = value_text.get_rect(center=(card_rect.centerx, icon_y + 60))
             surface.blit(value_text, value_rect)
         

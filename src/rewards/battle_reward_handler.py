@@ -268,10 +268,20 @@ class BattleRewardHandler(StateHandler):
             self.engine.player.heal(reward.value)  # 即座に回復も
         
         elif reward.reward_type == RewardType.ENERGY_UPGRADE:
-            self.engine.player.level_up_skill("energy", reward.value)
-        
+            # エネルギーシステムは削除済み - 何もしない
+            pass
+            
+        elif reward.reward_type == RewardType.SPECIAL_PUYO_BOOST:
+            # 特殊ぷよ出現率を永続的に増加
+            from special_puyo.special_puyo import special_puyo_manager
+            boost_multiplier = 1.0 + (reward.value / 100.0)  # パーセントを倍率に変換
+            special_puyo_manager.spawn_chance = min(0.5, special_puyo_manager.spawn_chance * boost_multiplier)
+            print(f"特殊ぷよ出現率が{reward.value}%アップ！現在の出現率: {special_puyo_manager.spawn_chance:.1%}")
+            
         elif reward.reward_type == RewardType.CHAIN_UPGRADE:
-            self.engine.player.level_up_skill("chain_damage", reward.value / 100.0)
+            # 連鎖ダメージ倍率を上昇
+            self.engine.player.chain_damage_multiplier += reward.value / 100.0
+            print(f"連鎖ダメージが{reward.value}%アップ！現在の倍率: {self.engine.player.chain_damage_multiplier:.1f}x")
     
     def _finalize_rewards(self):
         """報酬選択を確定してマップに戻る"""

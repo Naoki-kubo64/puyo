@@ -323,6 +323,18 @@ class TreasureHandler:
                 self.engine.player.inventory.add_item(artifact_item)
                 self._apply_artifact_effect(reward.value)
                 logger.info(f"Gained artifact: {reward.value.name}")
+        
+        elif reward.reward_type == RewardType.SPECIAL_PUYO_BOOST:
+            # 特殊ぷよ出現率を永続的に増加
+            from special_puyo.special_puyo import special_puyo_manager
+            boost_multiplier = 1.0 + (reward.value / 100.0)  # パーセントを倍率に変換
+            special_puyo_manager.spawn_chance = min(0.5, special_puyo_manager.spawn_chance * boost_multiplier)
+            logger.info(f"Special puyo spawn rate increased by {reward.value}%! Current rate: {special_puyo_manager.spawn_chance:.1%}")
+        
+        elif reward.reward_type == RewardType.CHAIN_UPGRADE:
+            # 連鎖ダメージ倍率を上昇
+            self.engine.player.chain_damage_multiplier += reward.value / 100.0
+            logger.info(f"Chain damage increased by {reward.value}%! Current multiplier: {self.engine.player.chain_damage_multiplier:.1f}x")
     
     def _apply_artifact_effect(self, artifact: Artifact):
         """装飾品の効果を適用"""
