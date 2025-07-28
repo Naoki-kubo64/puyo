@@ -374,8 +374,8 @@ class DungeonMap:
                 self._convert_battle_to_elite(node)
                 elite_placed = True
                 logger.info(f"Easy route: placed elite at {node.node_id}")
-            elif node.node_type == NodeType.BATTLE and node.floor <= 5 and random.random() < 0.4:
-                # 前半の戦闘の一部を宝箱に変換（報酬アップ）
+            elif node.node_type == NodeType.BATTLE and node.floor <= 5 and random.random() < 0.2:
+                # 前半の戦闘の一部を宝箱に変換（報酬アップ、確率を下げる）
                 node.node_type = NodeType.TREASURE
                 node.enemy_type = None
                 logger.debug(f"Easy route: converted battle to treasure at {node.node_id}")
@@ -545,19 +545,19 @@ class DungeonMap:
         
         for node_type in available_types:
             if node_type == NodeType.BATTLE:
-                weights.append(50)  # 通常戦闘の重みを増加
+                weights.append(70)  # 戦闘を更に増加
             elif node_type == NodeType.TREASURE:
-                weights.append(25)
+                weights.append(8)   # 宝箱を更に削減（12→8）
             elif node_type == NodeType.EVENT:
-                weights.append(20)
+                weights.append(15)  # イベントを減らす
             elif node_type == NodeType.SHOP:
-                weights.append(8)
+                weights.append(5)   # ショップを減らす
             elif node_type == NodeType.REST:
-                weights.append(12)  # 休憩所を少し増やす
+                weights.append(8)   # 休憩所を減らす
             elif node_type == NodeType.ELITE:
                 weights.append(elite_weight)  # フロアに応じて動的に調整（連続出現防止付き）
             else:
-                weights.append(5)
+                weights.append(3)
         
         return weights
     
