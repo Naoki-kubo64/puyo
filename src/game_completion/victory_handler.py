@@ -46,7 +46,6 @@ class VictoryHandler(StateHandler):
             "獲得ゴールド": f"{player.stats.total_gold_earned:,}",
             "最終ゴールド": f"{player.gold:,}",
             "最終HP": f"{player.hp}/{player.max_hp}",
-            "エネルギー": f"{player.energy}",
             "連鎖倍率": f"{player.chain_damage_multiplier:.1f}x",
             "エリート撃破": f"{player.stats.elite_battles}",
             "ボス撃破": f"{player.stats.boss_battles}",

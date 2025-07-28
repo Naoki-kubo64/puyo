@@ -89,11 +89,8 @@ class InventoryUI(StateHandler):
                             self.engine.player.heal(used_item.effect_value)
                             self._show_message(f"{used_item.name}を使用！HP{used_item.effect_value}回復")
                 elif "energy" in item.id:
-                    # エネルギーポーション
-                    used_item = self.inventory.use_consumable(item.id)
-                    if used_item:
-                        self.engine.player.energy += used_item.effect_value
-                        self._show_message(f"{used_item.name}を使用！エネルギー{used_item.effect_value}増加")
+                    # エネルギーシステムは削除済み - 何もしない
+                    self._show_message("エネルギーシステムは利用できません")
     
     def _show_message(self, message: str):
         """メッセージ表示（簡易実装）"""

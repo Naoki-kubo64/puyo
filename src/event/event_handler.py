@@ -461,7 +461,3 @@ class EventHandler(StateHandler):
         gold_surface = self.font_small.render(gold_text, True, Colors.GOLD)
         screen.blit(gold_surface, (200, info_y))
         
-        # エネルギー
-        energy_text = f"エネルギー: {self.engine.player.energy}"
-        energy_surface = self.font_small.render(energy_text, True, Colors.BLUE)
-        screen.blit(energy_surface, (380, info_y))

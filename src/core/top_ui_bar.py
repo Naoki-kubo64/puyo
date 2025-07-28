@@ -21,13 +21,11 @@ class TopUIBar:
         
         # UI要素の位置
         self.hp_icon_pos = (20, 15)
-        self.energy_icon_pos = (200, 15)
         self.gold_icon_pos = (380, 15)
         self.floor_icon_pos = (SCREEN_WIDTH - 120, 15)
         
         # アニメーション用
         self.hp_pulse = 0
-        self.energy_pulse = 0
         self.damage_flash = 0
         
         # アイコン画像を読み込み
@@ -39,7 +37,6 @@ class TopUIBar:
         """UIアニメーションを更新"""
         self.animation_time += dt
         self.hp_pulse = abs(math.sin(self.animation_time * 2))
-        self.energy_pulse = abs(math.sin(self.animation_time * 1.5))
         
         # ダメージフラッシュを減衰
         if self.damage_flash > 0:
@@ -73,7 +70,7 @@ class TopUIBar:
         self.damage_flash = 1.0
     
     def draw_top_bar(self, surface: pygame.Surface, player_hp: int, player_max_hp: int, 
-                     energy: int, max_energy: int, gold: int, floor: int):
+                     gold: int, floor: int):
         """上部UIバーを描画"""
         # 背景バー
         self._draw_background_bar(surface)
@@ -179,46 +176,6 @@ class TopUIBar:
         # HPバーの縁
         pygame.draw.rect(surface, (120, 100, 80), bar_bg_rect, 1)
     
-    def _draw_energy_display(self, surface: pygame.Surface, current_energy: int, max_energy: int):
-        """エネルギー表示を描画（削除済み）"""
-        return  # エネルギーシステム削除のため無効化
-        x, y = self.energy_icon_pos
-        
-        # エネルギーオーブ
-        orb_size = 15 + int(self.energy_pulse * 2)
-        orb_color = (100, 150, 255)
-        
-        # 外側の光
-        for r in range(orb_size + 5, orb_size, -1):
-            alpha = max(0, 50 - (r - orb_size) * 10)
-            if alpha > 0:
-                orb_surface = pygame.Surface((r*2, r*2))
-                orb_surface.set_alpha(alpha)
-                pygame.draw.circle(orb_surface, orb_color, (r, r), r)
-                surface.blit(orb_surface, (x - r, y + 10 - r))
-        
-        # メインオーブ
-        pygame.draw.circle(surface, orb_color, (x, y + 10), orb_size)
-        pygame.draw.circle(surface, (150, 200, 255), (x - 3, y + 7), 5)
-        
-        # エネルギー数値
-        energy_text = f"{current_energy}/{max_energy}"
-        energy_font = get_appropriate_font(self.fonts, energy_text, 'medium')
-        energy_surface = energy_font.render(energy_text, True, Colors.WHITE)
-        surface.blit(energy_surface, (x + 25, y + 5))
-        
-        # エネルギーオーブ（小さい球）
-        orb_y = y + 25
-        for i in range(max_energy):
-            orb_x = x + 25 + i * 15
-            if i < current_energy:
-                # 満杯のオーブ
-                pygame.draw.circle(surface, (100, 150, 255), (orb_x, orb_y), 6)
-                pygame.draw.circle(surface, (150, 200, 255), (orb_x - 2, orb_y - 2), 3)
-            else:
-                # 空のオーブ
-                pygame.draw.circle(surface, (50, 70, 100), (orb_x, orb_y), 6)
-                pygame.draw.circle(surface, (80, 100, 130), (orb_x, orb_y), 6, 1)
     
     def _draw_gold_display(self, surface: pygame.Surface, gold: int):
         """ゴールド表示を描画"""

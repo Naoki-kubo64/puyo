@@ -786,7 +786,6 @@ class BattleHandler:
         self.top_ui_bar.draw_top_bar(
             surface,
             self.player.hp, self.player.max_hp,
-            0, 0,  # エネルギーは削除済み（ダミー値）
             self.player.gold,   # ゴールド
             self.floor_level
         )
