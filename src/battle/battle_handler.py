@@ -737,7 +737,7 @@ class BattleHandler:
                     logger.info(f"Debug: Killed {enemy.get_display_name()}")
             
             # 戦闘終了チェック
-            if self.enemy_group.all_defeated():
+            if self.enemy_group.is_all_defeated():
                 self._handle_victory()
                 logger.info("Debug: All enemies killed - Victory!")
         
@@ -757,7 +757,7 @@ class BattleHandler:
                 
                 if target.current_hp <= 0:
                     target.is_alive = False
-                    if self.enemy_group.all_defeated():
+                    if self.enemy_group.is_all_defeated():
                         self._handle_victory()
         
         else:
