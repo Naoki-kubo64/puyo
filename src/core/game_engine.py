@@ -138,7 +138,7 @@ class GameEngine:
                             test_font = pygame.font.Font(font_path, FONT_SIZE_MEDIUM)
                             # 日本語と絵文字テスト
                             test_japanese = test_font.render("ゴブリン", True, (255, 255, 255))
-                            test_emoji = test_font.render("⚔️", True, (255, 255, 255))
+                            test_emoji = test_font.render("A", True, (255, 255, 255))
                             if ((test_japanese and test_japanese.get_width() > 0) or 
                                 (test_emoji and test_emoji.get_width() > 0)):
                                 japanese_font = test_font

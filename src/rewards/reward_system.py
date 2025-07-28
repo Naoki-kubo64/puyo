@@ -255,6 +255,8 @@ class RewardSelectionHandler:
             # 選択完了後はダンジョンマップに戻る
             if event.type == pygame.KEYDOWN and (event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE):
                 self._return_to_dungeon_map()
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                self._return_to_dungeon_map()
             return
         
         if event.type == pygame.KEYDOWN:
@@ -270,6 +272,33 @@ class RewardSelectionHandler:
                 if gold_reward:
                     self.selected_reward = gold_reward
                 self.selection_made = True
+        
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # マウスクリックで報酬選択
+            clicked_index = self._get_clicked_reward_index(event.pos)
+            if clicked_index is not None:
+                self.selected_index = clicked_index
+                self._select_reward()
+        
+        elif event.type == pygame.MOUSEMOTION:
+            # マウスホバーで選択インデックス更新
+            hovered_index = self._get_clicked_reward_index(event.pos)
+            if hovered_index is not None:
+                self.selected_index = hovered_index
+    
+    def _get_clicked_reward_index(self, mouse_pos: tuple) -> Optional[int]:
+        """クリックされた報酬のインデックスを取得"""
+        mouse_x, mouse_y = mouse_pos
+        
+        for i in range(len(self.rewards)):
+            x = self.start_x + i * (self.reward_width + self.reward_spacing)
+            y = self.start_y
+            
+            card_rect = pygame.Rect(x, y, self.reward_width, self.reward_height)
+            if card_rect.collidepoint(mouse_x, mouse_y):
+                return i
+        
+        return None
     
     def _select_reward(self):
         """報酬を選択"""

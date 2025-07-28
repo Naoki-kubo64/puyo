@@ -35,6 +35,8 @@ class Colors:
     
     # 追加色（ダンジョンマップ用）
     DARK_RED = (180, 50, 50)
+    GOLD = (255, 215, 0)
+    DARK_BLUE = (0, 0, 139)
     
     # UI色
     UI_BACKGROUND = (40, 40, 60)

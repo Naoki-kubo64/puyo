@@ -66,42 +66,42 @@ class VictoryHandler(StateHandler):
         player = self.engine.player
         
         # 基本実績
-        achievements.append("🏆 ダンジョン制覇")
+        achievements.append("ダンジョン制覇")
         
         # 戦闘実績
         if player.stats.get_win_rate() >= 90.0:
-            achievements.append("⚔️ 戦闘マスター (勝率90%以上)")
+            achievements.append("戦闘マスター (勝率90%以上)")
         
         if player.stats.highest_chain >= 10:
-            achievements.append("🔗 連鎖の達人 (最高連鎖10以上)")
+            achievements.append("連鎖の達人 (最高連鎖10以上)")
         
         if player.chain_damage_multiplier >= 2.0:
-            achievements.append("💥 破壊者 (連鎖倍率2.0x以上)")
+            achievements.append("破壊者 (連鎖倍率2.0x以上)")
         
         # 探索実績
         if player.stats.elite_battles >= 5:
-            achievements.append("👑 エリートハンター")
+            achievements.append("エリートハンター")
         
         if player.stats.events_encountered >= 10:
-            achievements.append("🎭 冒険者 (イベント10回以上)")
+            achievements.append("冒険者 (イベント10回以上)")
         
         # 経済実績
         if player.gold >= 500:
-            achievements.append("💰 富豪 (500ゴールド以上)")
+            achievements.append("富豪 (500ゴールド以上)")
         
         if player.stats.total_gold_earned >= 2000:
-            achievements.append("🏦 商売人 (総獲得2000ゴールド以上)")
+            achievements.append("商売人 (総獲得2000ゴールド以上)")
         
         # コレクション実績
         if len(player.inventory.items) >= 15:
-            achievements.append("🎒 コレクター (15アイテム以上)")
+            achievements.append("コレクター (15アイテム以上)")
         
         # 特殊実績
         if player.hp == player.max_hp:
-            achievements.append("❤️ 完璧主義者 (フルHP制覇)")
+            achievements.append("完璧主義者 (フルHP制覇)")
         
         if player.stats.battles_lost == 0:
-            achievements.append("🛡️ 無敗の英雄 (一度も敗北せず)")
+            achievements.append("無敗の英雄 (一度も敗北せず)")
         
         return achievements
     
@@ -311,7 +311,7 @@ class VictoryHandler(StateHandler):
     
     def _render_achievements(self, screen: pygame.Surface):
         """実績表示"""
-        achievements_title = self.font_medium.render("🏆 実績", True, Colors.GOLD)
+        achievements_title = self.font_medium.render("実績", True, Colors.GOLD)
         achievements_rect = achievements_title.get_rect(center=(screen.get_width() // 4, 220))
         screen.blit(achievements_title, achievements_rect)
         

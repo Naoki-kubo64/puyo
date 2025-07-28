@@ -799,13 +799,13 @@ class AuthenticDemoHandler:
         if self.current_pair and self.current_pair.active:
             if self.current_pair.update(dt, self.puyo_grid):
                 # ペアが完全に着地
-                logger.info(f"🎯 PAIR LANDED AND LOCKED - STARTING CHAIN CHECK 🎯")
+                logger.info(f"PAIR LANDED AND LOCKED - STARTING CHAIN CHECK")
                 self.current_pair = None
                 self.pending_chain_check = True
                 self.chain_delay_timer = 0.0
         elif self.current_pair and not self.current_pair.active:
             # ペアが非アクティブになった場合の緊急処理
-            logger.warning("⚠️ PAIR BECAME INACTIVE WITHOUT PROPER LANDING - FORCING COMPLETION ⚠️")
+            logger.warning("WARNING: PAIR BECAME INACTIVE WITHOUT PROPER LANDING - FORCING COMPLETION")
             self.current_pair = None
             self.pending_chain_check = True
             self.chain_delay_timer = 0.0

@@ -620,19 +620,19 @@ class Enemy:
     def get_action_icon(self, action: EnemyAction) -> str:
         """行動のアイコンを取得"""
         if action.action_type == ActionType.ATTACK:
-            return "⚔"
+            return "A"
         elif action.action_type == ActionType.SPECIAL:
-            return "💥"
+            return "S"
         elif action.action_type == ActionType.GUARD:
-            return "🛡"
+            return "G"
         elif action.action_type == ActionType.HEAL:
-            return "❤"
+            return "H"
         elif action.action_type == ActionType.BUFF:
-            return "💪"
+            return "B"
         elif action.action_type == ActionType.DEBUFF:
-            return "💀"
+            return "D"
         else:
-            return "❓"
+            return "?"
     
     def get_next_action_info(self) -> dict:
         """次の行動の詳細情報を取得"""

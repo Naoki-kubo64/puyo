@@ -102,8 +102,8 @@ class TreasureHandler:
         
         return rewards
     
-    def _create_treasure_artifact(self, floor_level: int) -> Artifact:
-        """宝箱用の高品質装飾品を作成"""
+    def _create_treasure_artifact(self, floor_level: int):
+        """宝箱用の高品質装飾品を作成（簡易版）"""
         # レアリティを底上げ
         rarity_weights = {
             Rarity.UNCOMMON: 20,
@@ -117,7 +117,7 @@ class TreasureHandler:
             weights=list(rarity_weights.values())
         )[0]
         
-        # 宝箱専用の特別な装飾品
+        # 宝箱専用の特別な装飾品（簡易オブジェクト）
         treasure_artifacts = [
             {
                 'name': 'Ancient Amulet',
@@ -125,8 +125,8 @@ class TreasureHandler:
                 'effect_type': 'hybrid',
                 'hp_bonus': 20,
                 'chain_bonus': 15,
-                'rarity': Rarity.EPIC,
-                'icon': '🔮',
+                'rarity': chosen_rarity,
+                'icon': 'A',
                 'color': Colors.PURPLE
             },
             {
@@ -134,8 +134,8 @@ class TreasureHandler:
                 'description': 'Gain 10 gold after each battle',
                 'effect_type': 'gold_per_battle',
                 'effect_value': 10,
-                'rarity': Rarity.RARE,
-                'icon': '💍',
+                'rarity': chosen_rarity,
+                'icon': 'R',
                 'color': Colors.YELLOW
             },
             {
@@ -143,26 +143,31 @@ class TreasureHandler:
                 'description': 'Heal 5 HP at the start of each battle',
                 'effect_type': 'heal_per_battle',
                 'effect_value': 5,
-                'rarity': Rarity.UNCOMMON,
-                'icon': '💎',
+                'rarity': chosen_rarity,
+                'icon': 'C',
                 'color': Colors.CYAN
             }
         ]
         
         artifact_data = random.choice(treasure_artifacts)
         
-        return Artifact(
-            name=artifact_data['name'],
-            description=artifact_data['description'],
-            rarity=chosen_rarity,
-            effect_type=artifact_data['effect_type'],
-            effect_value=artifact_data.get('effect_value', 0),
-            icon=artifact_data['icon'],
-            color=artifact_data['color']
-        )
+        # 簡易的なArtifactオブジェクトを作成
+        class SimpleArtifact:
+            def __init__(self, data):
+                self.name = data['name']
+                self.description = data['description']
+                self.effect_type = data['effect_type']
+                self.effect_value = data.get('effect_value', 0)
+                self.hp_bonus = data.get('hp_bonus', 0)
+                self.chain_bonus = data.get('chain_bonus', 0)
+                self.rarity = data['rarity']
+                self.icon = data['icon']
+                self.color = data['color']
+        
+        return SimpleArtifact(artifact_data)
     
-    def _create_treasure_potion(self, floor_level: int) -> Potion:
-        """宝箱用の高品質ポーションを作成"""
+    def _create_treasure_potion(self, floor_level: int):
+        """宝箱用の高品質ポーションを作成（簡易版）"""
         # レアリティを底上げ
         rarity_weights = {
             Rarity.UNCOMMON: 30,
@@ -176,7 +181,7 @@ class TreasureHandler:
             weights=list(rarity_weights.values())
         )[0]
         
-        # 宝箱専用の特別なポーション
+        # 宝箱専用の特別なポーション（簡易オブジェクト）
         treasure_potions = [
             {
                 'name': 'Elixir of Power',
@@ -184,8 +189,8 @@ class TreasureHandler:
                 'effect_type': 'damage_boost',
                 'effect_value': 100,  # 100%ダメージ増加
                 'duration': 5,
-                'rarity': Rarity.EPIC,
-                'icon': '⚡',
+                'rarity': chosen_rarity,
+                'icon': 'E',
                 'color': Colors.YELLOW
             },
             {
@@ -193,32 +198,36 @@ class TreasureHandler:
                 'description': 'Restore 50 HP immediately',
                 'effect_type': 'heal',
                 'effect_value': 50,
-                'rarity': Rarity.RARE,
-                'icon': '🍯',
+                'rarity': chosen_rarity,
+                'icon': 'H',
                 'color': Colors.GREEN
             },
             {
                 'name': 'Mystic Brew',
                 'description': 'Next 3 battles start with extra energy',
-                'effect_type': 'energy_boost',
+                'effect_type': 'chain_power_boost',
                 'effect_value': 3,
-                'rarity': Rarity.UNCOMMON,
-                'icon': '🧪',
+                'rarity': chosen_rarity,
+                'icon': 'M',
                 'color': Colors.PURPLE
             }
         ]
         
         potion_data = random.choice(treasure_potions)
         
-        return Potion(
-            name=potion_data['name'],
-            description=potion_data['description'],
-            rarity=chosen_rarity,
-            effect_type=potion_data['effect_type'],
-            effect_value=potion_data['effect_value'],
-            icon=potion_data['icon'],
-            color=potion_data['color']
-        )
+        # 簡易的なPotionオブジェクトを作成
+        class SimplePotion:
+            def __init__(self, data):
+                self.name = data['name']
+                self.description = data['description']
+                self.effect_type = data['effect_type']
+                self.effect_value = data['effect_value']
+                self.duration = data.get('duration', 1)
+                self.rarity = data['rarity']
+                self.icon = data['icon']
+                self.color = data['color']
+        
+        return SimplePotion(potion_data)
     
     def on_enter(self, previous_state):
         """宝箱画面開始"""
@@ -236,9 +245,14 @@ class TreasureHandler:
             # 報酬確認後はマップに戻る
             if event.type == pygame.KEYDOWN and (event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE):
                 self._collect_treasure()
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                self._collect_treasure()
         else:
-            # 宝箱開封中はスペースキーで即座に表示
+            # 宝箱開封中はスペースキーまたはクリックで即座に表示
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                self.treasure_revealed = True
+                self.animation_timer = self.reveal_delay
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self.treasure_revealed = True
                 self.animation_timer = self.reveal_delay
     
@@ -428,7 +442,7 @@ class TreasureHandler:
         font_large = self.engine.fonts['large']
         
         # 宝箱アイコン
-        chest_icon = "📦" if not self.chest_opened else "💎"
+        chest_icon = "T" if not self.chest_opened else "T"
         chest_text = font_title.render(chest_icon, True, Colors.YELLOW)
         chest_rect = chest_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
         surface.blit(chest_text, chest_rect)
@@ -464,7 +478,7 @@ class TreasureHandler:
         font_medium = self.engine.fonts['medium']
         
         # タイトル
-        title_text = font_title.render("💎 TREASURE FOUND! 💎", True, Colors.YELLOW)
+        title_text = font_title.render("TREASURE FOUND!", True, Colors.YELLOW)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 150))
         surface.blit(title_text, title_rect)
         
@@ -475,7 +489,7 @@ class TreasureHandler:
             
             # 報酬アイコン
             if reward.reward_type == RewardType.GOLD:
-                icon = "💰"
+                icon = "G"
                 color = Colors.YELLOW
             elif reward.reward_type == RewardType.ARTIFACT:
                 icon = reward.value.icon
@@ -484,7 +498,7 @@ class TreasureHandler:
                 icon = reward.value.icon
                 color = reward.value.color
             else:
-                icon = "❤"
+                icon = "H"
                 color = Colors.RED
             
             icon_text = font_large.render(icon, True, color)

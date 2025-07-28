@@ -1,10 +1,13 @@
 import pygame
 import random
+import logging
 from typing import List, Dict, Callable, Optional
 from core.state_handler import StateHandler
-from core.constants import GameState, Colors, NodeType
+from core.constants import GameState, Colors
 from core.game_engine import GameEngine
-from dungeon.dungeon_node import DungeonNode
+from dungeon.dungeon_map import NodeType, DungeonNode
+
+logger = logging.getLogger(__name__)
 
 class EventChoice:
     def __init__(self, text: str, effect: Callable, description: str = ""):
@@ -29,6 +32,14 @@ class EventHandler(StateHandler):
         self.choice_rects: List[pygame.Rect] = []
         self.hovered_choice = -1
         self.event_completed = False
+        self.result_message = ""
+        
+        # Store pre-event stats for comparison
+        self.pre_event_stats = {
+            'hp': self.engine.player.hp,
+            'max_hp': self.engine.player.max_hp,
+            'gold': self.engine.player.gold
+        }
         
         # Generate random event
         self._generate_event()
@@ -52,15 +63,20 @@ class EventHandler(StateHandler):
             roll = random.randint(1, 3)
             if roll == 1:
                 heal_amount = random.randint(15, 25)
-                self.engine.player.heal(heal_amount)
-                self._show_result(f"祠の力で {heal_amount} HP回復した！")
+                old_hp = self.engine.player.hp
+                self.engine.player.hp = min(self.engine.player.max_hp, self.engine.player.hp + heal_amount)
+                actual_heal = self.engine.player.hp - old_hp
+                self._show_result(f"祠の力で {actual_heal} HP回復した！")
             elif roll == 2:
                 self.engine.player.max_hp += 5
-                self.engine.player.chain_damage_multiplier += 0.1
+                self.engine.player.hp += 5  # 現在HPも同じ分増加
+                if not hasattr(self.engine.player, 'chain_damage_bonus'):
+                    self.engine.player.chain_damage_bonus = 0
+                self.engine.player.chain_damage_bonus += 10
                 self._show_result("祠の加護を受けた！最大HP+5、連鎖ダメージ+10%")
             else:
                 curse_damage = random.randint(8, 12)
-                self.engine.player.take_damage(curse_damage)
+                self.engine.player.hp = max(1, self.engine.player.hp - curse_damage)
                 self._show_result(f"祠の呪いを受けた... {curse_damage}ダメージ")
         
         def ignore_effect():
@@ -71,7 +87,7 @@ class EventHandler(StateHandler):
             # 確実にダメージを受けるが、ゴールドを得る
             damage = random.randint(5, 10)
             gold = random.randint(80, 120)
-            self.engine.player.take_damage(damage)
+            self.engine.player.hp = max(1, self.engine.player.hp - damage)
             self.engine.player.gold += gold
             self._show_result(f"祠の宝を盗んだ！{gold}ゴールドを得たが {damage}ダメージを受けた")
         
@@ -91,8 +107,10 @@ class EventHandler(StateHandler):
             cost = 40
             if self.engine.player.gold >= cost:
                 self.engine.player.gold -= cost
-                self.engine.player.heal(30)
-                self._show_result(f"ポーションを購入！30HP回復（-{cost}ゴールド）")
+                old_hp = self.engine.player.hp
+                self.engine.player.hp = min(self.engine.player.max_hp, self.engine.player.hp + 30)
+                actual_heal = self.engine.player.hp - old_hp
+                self._show_result(f"ポーションを購入！{actual_heal}HP回復（-{cost}ゴールド）")
             else:
                 self._show_result("ゴールドが足りない...")
         
@@ -101,6 +119,7 @@ class EventHandler(StateHandler):
             if self.engine.player.gold >= cost:
                 self.engine.player.gold -= cost
                 self.engine.player.max_hp += 8
+                self.engine.player.hp += 8  # 現在HPも同じ分増加
                 self._show_result(f"祝福を購入！最大HP+8（-{cost}ゴールド）")
             else:
                 self._show_result("ゴールドが足りない...")
@@ -113,7 +132,7 @@ class EventHandler(StateHandler):
                 self._show_result(f"強盗成功！{gold}ゴールドを奪った！")
             else:
                 damage = random.randint(12, 18)
-                self.engine.player.take_damage(damage)
+                self.engine.player.hp = max(1, self.engine.player.hp - damage)
                 self._show_result(f"強盗失敗！商人に反撃され {damage}ダメージ")
         
         return RandomEvent(
@@ -132,11 +151,13 @@ class EventHandler(StateHandler):
             # 50%で大回復、50%で毒
             if random.random() < 0.5:
                 heal_amount = random.randint(25, 40)
-                self.engine.player.heal(heal_amount)
-                self._show_result(f"清浄な水だった！{heal_amount}HP回復")
+                old_hp = self.engine.player.hp
+                self.engine.player.hp = min(self.engine.player.max_hp, self.engine.player.hp + heal_amount)
+                actual_heal = self.engine.player.hp - old_hp
+                self._show_result(f"清浄な水だった！{actual_heal}HP回復")
             else:
                 damage = random.randint(15, 20)
-                self.engine.player.take_damage(damage)
+                self.engine.player.hp = max(1, self.engine.player.hp - damage)
                 self._show_result(f"呪われた水だった... {damage}ダメージ")
         
         def purify_effect():
@@ -145,8 +166,10 @@ class EventHandler(StateHandler):
             if self.engine.player.gold >= cost:
                 self.engine.player.gold -= cost
                 heal_amount = 20
-                self.engine.player.heal(heal_amount)
-                self._show_result(f"泉を浄化！{heal_amount}HP回復（-{cost}ゴールド）")
+                old_hp = self.engine.player.hp
+                self.engine.player.hp = min(self.engine.player.max_hp, self.engine.player.hp + heal_amount)
+                actual_heal = self.engine.player.hp - old_hp
+                self._show_result(f"泉を浄化！{actual_heal}HP回復（-{cost}ゴールド）")
             else:
                 self._show_result("浄化に必要なゴールドが足りない...")
         
@@ -167,15 +190,21 @@ class EventHandler(StateHandler):
         """古代図書館イベント"""
         def study_effect():
             # 知識を得てスキル強化
-            self.engine.player.chain_damage_multiplier += 0.15
-            self.engine.player.energy += 1
-            self._show_result("古代の知識を習得！連鎖ダメージ+15%、エネルギー+1")
+            if not hasattr(self.engine.player, 'chain_damage_bonus'):
+                self.engine.player.chain_damage_bonus = 0
+            self.engine.player.chain_damage_bonus += 15
+            if not hasattr(self.engine.player, 'max_energy'):
+                self.engine.player.max_energy = 3
+            self.engine.player.max_energy += 1
+            self._show_result("古代の知識を習得！連鎖ダメージ+15%、最大エネルギー+1")
         
         def rest_effect():
             # 読書で休憩
             heal_amount = random.randint(12, 18)
-            self.engine.player.heal(heal_amount)
-            self._show_result(f"静かな環境で休憩した。{heal_amount}HP回復")
+            old_hp = self.engine.player.hp
+            self.engine.player.hp = min(self.engine.player.max_hp, self.engine.player.hp + heal_amount)
+            actual_heal = self.engine.player.hp - old_hp
+            self._show_result(f"静かな環境で休憩した。{actual_heal}HP回復")
         
         def search_effect():
             # 宝探し
@@ -185,7 +214,7 @@ class EventHandler(StateHandler):
                 self._show_result(f"隠された宝を発見！{gold}ゴールド獲得")
             else:
                 damage = 8
-                self.engine.player.take_damage(damage)
+                self.engine.player.hp = max(1, self.engine.player.hp - damage)
                 self._show_result(f"罠にかかった！{damage}ダメージ")
         
         return RandomEvent(
@@ -205,16 +234,18 @@ class EventHandler(StateHandler):
             gold = random.randint(120, 180)
             curse_damage = random.randint(10, 15)
             self.engine.player.gold += gold
-            self.engine.player.take_damage(curse_damage)
-            self.engine.player.max_hp -= 3  # 永続的な呪い
+            self.engine.player.hp = max(1, self.engine.player.hp - curse_damage)
+            self.engine.player.max_hp = max(10, self.engine.player.max_hp - 3)  # 永続的な呪い（最低10HPは残す）
             self._show_result(f"偶像を奪った！{gold}ゴールド獲得したが呪いを受けた（-3最大HP、{curse_damage}ダメージ）")
         
         def worship_effect():
             # 偶像を崇拝して加護を得る
             self.engine.player.max_hp += 10
             heal_amount = 15
-            self.engine.player.heal(heal_amount)
-            self._show_result(f"偶像の加護を受けた！最大HP+10、{heal_amount}HP回復")
+            old_hp = self.engine.player.hp
+            self.engine.player.hp = min(self.engine.player.max_hp, self.engine.player.hp + heal_amount)
+            actual_heal = self.engine.player.hp - old_hp
+            self._show_result(f"偶像の加護を受けた！最大HP+10、{actual_heal}HP回復")
         
         def leave_effect():
             # 何もしない
@@ -234,8 +265,64 @@ class EventHandler(StateHandler):
     
     def _show_result(self, message: str):
         """結果メッセージを表示して完了状態にする"""
-        self.result_message = message
+        # Calculate stat changes
+        hp_change = self.engine.player.hp - self.pre_event_stats['hp']
+        max_hp_change = self.engine.player.max_hp - self.pre_event_stats['max_hp']
+        gold_change = self.engine.player.gold - self.pre_event_stats['gold']
+        
+        # Build detailed result message
+        detailed_message = message + "\n\n=== ステータス変化 ==="
+        
+        if hp_change != 0:
+            detailed_message += f"\nHP: {self.pre_event_stats['hp']} → {self.engine.player.hp} ({hp_change:+d})"
+        
+        if max_hp_change != 0:
+            detailed_message += f"\n最大HP: {self.pre_event_stats['max_hp']} → {self.engine.player.max_hp} ({max_hp_change:+d})"
+        
+        if gold_change != 0:
+            detailed_message += f"\nゴールド: {self.pre_event_stats['gold']} → {self.engine.player.gold} ({gold_change:+d})"
+        
+        # Check for bonus effects
+        if hasattr(self.engine.player, 'chain_damage_bonus'):
+            detailed_message += f"\n連鎖ダメージボーナス: {self.engine.player.chain_damage_bonus}%"
+        
+        self.result_message = detailed_message
         self.event_completed = True
+    
+    def _return_to_map(self):
+        """ダンジョンマップに戻る（マップ進行処理を含む）"""
+        try:
+            from dungeon.map_handler import DungeonMapHandler
+            
+            # マップ進行処理
+            if (hasattr(self.engine, 'persistent_dungeon_map') and self.engine.persistent_dungeon_map and 
+                self.current_node):
+                
+                dungeon_map = self.engine.persistent_dungeon_map
+                
+                logger.info(f"Processing map progression after event for node: {self.current_node.node_id}")
+                
+                # ノードを選択して次の階層を解放
+                success = dungeon_map.select_node(self.current_node.node_id)
+                if success:
+                    available_nodes = dungeon_map.get_available_nodes()
+                    logger.info(f"Map progression completed: {self.current_node.node_id} -> Available: {[n.node_id for n in available_nodes]}")
+                else:
+                    logger.error(f"Failed to progress map for node: {self.current_node.node_id}")
+            
+            # ダンジョンマップハンドラーを作成
+            map_handler = DungeonMapHandler(self.engine)
+            
+            # ダンジョンマップ状態に変更
+            self.engine.register_state_handler(GameState.DUNGEON_MAP, map_handler)
+            self.engine.change_state(GameState.DUNGEON_MAP)
+            
+            logger.info("Returned to dungeon map after event")
+            
+        except Exception as e:
+            logger.error(f"Failed to return to dungeon map: {e}")
+            # フォールバック: メニューに戻る
+            self.engine.change_state(GameState.MENU)
     
     def handle_event(self, event: pygame.event.Event) -> bool:
         if event.type == pygame.MOUSEMOTION:
@@ -249,9 +336,8 @@ class EventHandler(StateHandler):
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:  # Left click
                 if self.event_completed:
-                    # イベント完了後、マップに戻る
-                    if hasattr(self.engine, 'change_state'):
-                        self.engine.change_state(GameState.DUNGEON_MAP)
+                    # イベント完了後、マップに戻る（マップ進行処理を含む）
+                    self._return_to_map()
                     return True
                 
                 mouse_pos = pygame.mouse.get_pos()
@@ -264,8 +350,10 @@ class EventHandler(StateHandler):
         
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                if hasattr(self.engine, 'change_state'):
-                    self.engine.change_state(GameState.DUNGEON_MAP)
+                if self.event_completed:
+                    self._return_to_map()
+                else:
+                    self._return_to_map()
                 return True
         
         return False

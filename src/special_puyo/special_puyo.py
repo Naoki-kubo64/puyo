@@ -308,24 +308,24 @@ class SpecialPuyo:
         """アイコン文字を取得"""
         icons = {
             # 既存の特殊ぷよ
-            SpecialPuyoType.BOMB: "💣",
-            SpecialPuyoType.LIGHTNING: "⚡",
-            SpecialPuyoType.RAINBOW: "🌈",
+            SpecialPuyoType.BOMB: "B",
+            SpecialPuyoType.LIGHTNING: "L",
+            SpecialPuyoType.RAINBOW: "R",
             SpecialPuyoType.MULTIPLIER: "×",
-            SpecialPuyoType.FREEZE: "❄",
-            SpecialPuyoType.HEAL: "♥",
-            SpecialPuyoType.SHIELD: "🛡",
-            SpecialPuyoType.POISON: "☠",
+            SpecialPuyoType.FREEZE: "F",
+            SpecialPuyoType.HEAL: "H",
+            SpecialPuyoType.SHIELD: "S",
+            SpecialPuyoType.POISON: "P",
             SpecialPuyoType.WILD: "?",
-            SpecialPuyoType.CHAIN_STARTER: "⭐",
+            SpecialPuyoType.CHAIN_STARTER: "C",
             
             # 新しい特殊ぷよ
-            SpecialPuyoType.BUFF: "💪",
-            SpecialPuyoType.TIMED_POISON: "⏰",
-            SpecialPuyoType.CHAIN_EXTEND: "➕",
-            SpecialPuyoType.ABSORB_SHIELD: "🔄",
-            SpecialPuyoType.CURSE: "👁",
-            SpecialPuyoType.REFLECT: "🪞",
+            SpecialPuyoType.BUFF: "U",
+            SpecialPuyoType.TIMED_POISON: "T",
+            SpecialPuyoType.CHAIN_EXTEND: "E",
+            SpecialPuyoType.ABSORB_SHIELD: "A",
+            SpecialPuyoType.CURSE: "K",
+            SpecialPuyoType.REFLECT: "M",
         }
         
         return icons.get(self.special_type, "S")

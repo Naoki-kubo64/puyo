@@ -65,7 +65,7 @@ class RestHandler:
                 'type': RestAction.HEAL,
                 'name': 'Rest and Heal',
                 'description': f'Recover {heal_amount} HP',
-                'icon': '♨',
+                'icon': 'R',
                 'color': (50, 200, 50),
                 'heal_amount': heal_amount
             })
@@ -75,7 +75,7 @@ class RestHandler:
             'type': RestAction.UPGRADE,
             'name': 'Train Skills',
             'description': 'Increase max HP by 5\\nand chain damage by 10%',
-            'icon': '⚡',
+            'icon': 'T',
             'color': (200, 150, 50),
             'hp_bonus': 5,
             'damage_bonus': 10
@@ -86,7 +86,7 @@ class RestHandler:
             'type': RestAction.MEDITATE,
             'name': 'Meditate',
             'description': 'Gain energy boost\\nfor next 3 battles',
-            'icon': '🧘',
+            'icon': 'M',
             'color': (100, 100, 255),
             'energy_boost': 3
         })
@@ -106,6 +106,8 @@ class RestHandler:
             # アクション完了後はマップに戻る
             if event.type == pygame.KEYDOWN and (event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE):
                 self._return_to_map()
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                self._return_to_map()
             return
         
         if event.type == pygame.KEYDOWN:
@@ -118,6 +120,33 @@ class RestHandler:
             elif event.key == pygame.K_ESCAPE:
                 # 何もせずに戻る
                 self._return_to_map()
+        
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # マウスクリックでアクション選択
+            clicked_index = self._get_clicked_action_index(event.pos)
+            if clicked_index is not None:
+                self.selected_index = clicked_index
+                self._execute_action()
+        
+        elif event.type == pygame.MOUSEMOTION:
+            # マウスホバーで選択インデックス更新
+            hovered_index = self._get_clicked_action_index(event.pos)
+            if hovered_index is not None:
+                self.selected_index = hovered_index
+    
+    def _get_clicked_action_index(self, mouse_pos: tuple) -> Optional[int]:
+        """クリックされたアクションのインデックスを取得"""
+        mouse_x, mouse_y = mouse_pos
+        
+        for i in range(len(self.available_actions)):
+            x = self.start_x + i * (self.card_width + self.card_spacing)
+            y = self.start_y
+            
+            card_rect = pygame.Rect(x, y, self.card_width, self.card_height)
+            if card_rect.collidepoint(mouse_x, mouse_y):
+                return i
+        
+        return None
     
     def _execute_action(self):
         """選択されたアクションを実行"""
@@ -165,14 +194,14 @@ class RestHandler:
     
     def _execute_meditate(self, action):
         """瞑想を実行"""
-        energy_boost = action['energy_boost']
+        damage_boost = action['damage_boost']
         
-        # エネルギーブースト効果（プレイヤーデータに追加）
-        if not hasattr(self.engine.player, 'energy_boost_remaining'):
-            self.engine.player.energy_boost_remaining = 0
-        self.engine.player.energy_boost_remaining += energy_boost
+        # ダメージブースト効果（プレイヤーデータに追加）
+        if not hasattr(self.engine.player, 'chain_damage_bonus'):
+            self.engine.player.chain_damage_bonus = 0
+        self.engine.player.chain_damage_bonus += damage_boost
         
-        logger.info(f"Meditated: +{energy_boost} energy boost for next battles")
+        logger.info(f"Meditated: +{damage_boost}% chain damage bonus")
     
     def _return_to_map(self):
         """ダンジョンマップに戻る"""
@@ -249,7 +278,7 @@ class RestHandler:
     def _render_title(self, surface: pygame.Surface):
         """タイトルを描画"""
         font_title = self.engine.fonts['title']
-        title_text = font_title.render("♨ REST AREA ♨", True, Colors.WHITE)
+        title_text = font_title.render("REST AREA", True, Colors.WHITE)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 80))
         surface.blit(title_text, title_rect)
         

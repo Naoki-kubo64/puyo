@@ -58,7 +58,6 @@ class PlayerSkills:
     """プレイヤースキル・能力値"""
     # 基本能力値
     max_hp: int = PLAYER_MAX_HP
-    energy: int = 3
     chain_damage_multiplier: float = 1.0
     
     # 戦闘スキル
@@ -77,8 +76,6 @@ class PlayerSkills:
         """アーティファクト効果を適用"""
         if "max_hp_bonus" in effects:
             self.max_hp += effects["max_hp_bonus"]
-        if "energy_bonus" in effects:
-            self.energy += effects["energy_bonus"]
         if "damage_bonus" in effects:
             self.chain_damage_multiplier += effects["damage_bonus"] / 100.0
         if "shop_discount" in effects:
@@ -94,7 +91,6 @@ class PlayerData:
         self.hp: int = PLAYER_INITIAL_HP
         self.max_hp: int = PLAYER_MAX_HP
         self.gold: int = 50  # 初期ゴールド
-        self.energy: int = 3
         self.chain_damage_multiplier: float = 1.0
         
         # 統計情報
@@ -163,9 +159,6 @@ class PlayerData:
         if skill_name == "max_hp":
             self.max_hp += int(amount)
             self.skills.max_hp += int(amount)
-        elif skill_name == "energy":
-            self.energy += int(amount)
-            self.skills.energy += int(amount)
         elif skill_name == "chain_damage":
             self.chain_damage_multiplier += amount
             self.skills.chain_damage_multiplier += amount
@@ -218,7 +211,6 @@ class PlayerData:
         # スキル値をリセットしてから再適用
         self.skills = PlayerSkills()
         self.skills.max_hp = self.max_hp
-        self.skills.energy = self.energy
         self.skills.chain_damage_multiplier = self.chain_damage_multiplier
         
         # アーティファクト効果を適用
@@ -226,7 +218,6 @@ class PlayerData:
         
         # 実際の値に反映
         self.max_hp = self.skills.max_hp
-        self.energy = self.skills.energy
         self.chain_damage_multiplier = self.skills.chain_damage_multiplier
     
     def get_effective_hp_ratio(self) -> float:
@@ -239,7 +230,6 @@ class PlayerData:
             "HP": f"{self.hp}/{self.max_hp}",
             "ゴールド": f"{self.gold}",
             "フロア": f"{self.current_floor}",
-            "エネルギー": f"{self.energy}",
             "連鎖倍率": f"{self.chain_damage_multiplier:.1f}x",
             "勝率": f"{self.stats.get_win_rate():.1f}%",
             "総戦闘": f"{self.stats.total_battles}",
@@ -252,7 +242,6 @@ class PlayerData:
             "hp": self.hp,
             "max_hp": self.max_hp,
             "gold": self.gold,
-            "energy": self.energy,
             "chain_damage_multiplier": self.chain_damage_multiplier,
             "current_floor": self.current_floor,
             "stats": self.stats.__dict__,
@@ -265,7 +254,6 @@ class PlayerData:
         self.hp = data.get("hp", PLAYER_INITIAL_HP)
         self.max_hp = data.get("max_hp", PLAYER_MAX_HP)
         self.gold = data.get("gold", 50)
-        self.energy = data.get("energy", 3)
         self.chain_damage_multiplier = data.get("chain_damage_multiplier", 1.0)
         self.current_floor = data.get("current_floor", 1)
         

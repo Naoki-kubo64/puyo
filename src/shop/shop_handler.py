@@ -10,8 +10,9 @@ from typing import Dict, List, Optional, Union
 
 from core.constants import *
 from core.game_engine import GameEngine
-from items.potions import Potion, create_random_potion
+from items.potions import Potion, create_random_potion, PotionType
 from items.artifacts import Artifact, create_random_artifact
+from special_puyo.special_puyo import SpecialPuyoType, special_puyo_manager
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +20,12 @@ logger = logging.getLogger(__name__)
 class ShopItem:
     """ショップアイテムクラス"""
     
-    def __init__(self, item: Union[Potion, Artifact], price: int, slot_index: int):
+    def __init__(self, item: Union[Potion, Artifact, dict], price: int, slot_index: int):
         self.item = item
         self.price = price
         self.slot_index = slot_index
         self.sold = False
+        self.item_type = self._determine_item_type()
     
     def get_name(self) -> str:
         return self.item.name
@@ -39,7 +41,19 @@ class ShopItem:
     def get_icon(self) -> str:
         if hasattr(self.item, 'icon'):
             return self.item.icon
+        elif isinstance(self.item, dict) and 'icon' in self.item:
+            return self.item['icon']
         return "🎁"
+    
+    def _determine_item_type(self) -> str:
+        """アイテムタイプを判定"""
+        if isinstance(self.item, Potion):
+            return "potion"
+        elif isinstance(self.item, Artifact):
+            return "artifact"
+        elif isinstance(self.item, dict) and 'type' in self.item:
+            return self.item['type']
+        return "unknown"
 
 
 class ShopHandler:
@@ -74,7 +88,7 @@ class ShopHandler:
         logger.info(f"ShopHandler initialized with {len(self.shop_items)} items")
     
     def _generate_shop_items(self) -> List[ShopItem]:
-        """ショップアイテムを生成"""
+        """ショップアイテムを生成（バランス調整済み）"""
         items = []
         
         # フロアレベルを取得（ダンジョンマップから）
@@ -84,63 +98,158 @@ class ShopHandler:
             self.current_node):
             floor_level = self.current_node.floor + 1
         
-        # ポーション 2-3個
+        # ポーション 2-3個（安価なアイテム）
         potion_count = random.randint(2, 3)
         for i in range(potion_count):
             potion = create_random_potion(floor_level)
             price = self._calculate_potion_price(potion)
             items.append(ShopItem(potion, price, len(items)))
         
-        # 装飾品 1-2個
-        artifact_count = random.randint(1, 2)
-        for i in range(artifact_count):
-            artifact = create_random_artifact(floor_level)
-            price = self._calculate_artifact_price(artifact)
-            items.append(ShopItem(artifact, price, len(items)))
+        # 特殊ぷよ 1-2個（中価格のアイテム）
+        special_puyo_count = random.randint(1, 2)
+        for i in range(special_puyo_count):
+            special_puyo_item = self._create_special_puyo_item(floor_level)
+            price = self._calculate_special_puyo_price(special_puyo_item)
+            items.append(ShopItem(special_puyo_item, price, len(items)))
         
-        # HP回復アイテム（常に1個）
-        heal_potion = Potion(
-            name="Healing Elixir",
-            description="Recover 25 HP immediately",
-            rarity=Rarity.COMMON,
-            effect_type="heal",
-            effect_value=25,
-            icon="💚",
-            color=Colors.GREEN
-        )
-        items.append(ShopItem(heal_potion, 30, len(items)))
+        # アーティファクト 1個（高価なアイテム）
+        artifact = create_random_artifact(floor_level)
+        price = self._calculate_artifact_price(artifact)
+        items.append(ShopItem(artifact, price, len(items)))
+        
+        # HP回復ポーション（常に1個、安価）
+        heal_potion = self._create_heal_potion()
+        items.append(ShopItem(heal_potion, 15, len(items)))
         
         return items
     
     def _calculate_potion_price(self, potion: Potion) -> int:
-        """ポーションの価格を計算"""
+        """ポーションの価格を計算（20円前後の相場）"""
         base_prices = {
-            Rarity.COMMON: 25,
-            Rarity.UNCOMMON: 40,
-            Rarity.RARE: 60,
-            Rarity.EPIC: 80,
-            Rarity.LEGENDARY: 120
+            Rarity.COMMON: 15,
+            Rarity.UNCOMMON: 22,
+            Rarity.RARE: 30,
+            Rarity.EPIC: 40,
+            Rarity.LEGENDARY: 55
         }
-        base_price = base_prices.get(potion.rarity, 25)
+        base_price = base_prices.get(potion.rarity, 15)
         
         # ±20%のランダム要素
         variation = random.uniform(0.8, 1.2)
         return int(base_price * variation)
     
     def _calculate_artifact_price(self, artifact: Artifact) -> int:
-        """装飾品の価格を計算"""
+        """アーティファクトの価格を計算（高級アイテム）"""
         base_prices = {
-            Rarity.COMMON: 150,
-            Rarity.UNCOMMON: 250,
-            Rarity.RARE: 400,
-            Rarity.EPIC: 600,
-            Rarity.LEGENDARY: 1000
+            Rarity.COMMON: 45,
+            Rarity.UNCOMMON: 65,
+            Rarity.RARE: 90,
+            Rarity.EPIC: 120,
+            Rarity.LEGENDARY: 180
         }
-        base_price = base_prices.get(artifact.rarity, 150)
+        base_price = base_prices.get(artifact.rarity, 45)
         
         # ±15%のランダム要素
         variation = random.uniform(0.85, 1.15)
         return int(base_price * variation)
+    
+    def _create_special_puyo_item(self, floor_level: int) -> dict:
+        """特殊ぷよアイテムを作成"""
+        # フロアレベルに応じて出現する特殊ぷよを調整
+        if floor_level <= 3:
+            # 初期フロア：基本的な特殊ぷよ
+            available_types = [
+                SpecialPuyoType.HEAL, SpecialPuyoType.BOMB, 
+                SpecialPuyoType.LIGHTNING, SpecialPuyoType.SHIELD
+            ]
+        elif floor_level <= 6:
+            # 中盤：より強力な特殊ぷよ
+            available_types = [
+                SpecialPuyoType.MULTIPLIER, SpecialPuyoType.FREEZE,
+                SpecialPuyoType.POISON, SpecialPuyoType.WILD
+            ]
+        else:
+            # 後半：最強の特殊ぷよ
+            available_types = [
+                SpecialPuyoType.RAINBOW, SpecialPuyoType.CHAIN_STARTER,
+                SpecialPuyoType.BUFF, SpecialPuyoType.REFLECT
+            ]
+        
+        selected_type = random.choice(available_types)
+        
+        # レアリティを決定
+        rarity_weights = {
+            Rarity.COMMON: 0.6,
+            Rarity.UNCOMMON: 0.3,
+            Rarity.RARE: 0.08,
+            Rarity.EPIC: 0.02
+        }
+        
+        rarities = list(rarity_weights.keys())
+        weights = list(rarity_weights.values())
+        rarity = random.choices(rarities, weights=weights)[0]
+        
+        # アイコンを取得
+        icons = {
+            SpecialPuyoType.BOMB: "💣",
+            SpecialPuyoType.LIGHTNING: "⚡",
+            SpecialPuyoType.RAINBOW: "🌈",
+            SpecialPuyoType.MULTIPLIER: "✖️",
+            SpecialPuyoType.FREEZE: "❄️",
+            SpecialPuyoType.HEAL: "💚",
+            SpecialPuyoType.SHIELD: "🛡️",
+            SpecialPuyoType.POISON: "☠️",
+            SpecialPuyoType.WILD: "❓",
+            SpecialPuyoType.CHAIN_STARTER: "🔗",
+            SpecialPuyoType.BUFF: "💪",
+            SpecialPuyoType.REFLECT: "🪞"
+        }
+        
+        # 説明文
+        descriptions = {
+            SpecialPuyoType.BOMB: "Destroys surrounding puyos",
+            SpecialPuyoType.LIGHTNING: "Eliminates entire column",
+            SpecialPuyoType.RAINBOW: "Matches any color",
+            SpecialPuyoType.MULTIPLIER: "1.5x chain damage",
+            SpecialPuyoType.FREEZE: "Delays enemy actions",
+            SpecialPuyoType.HEAL: "Restores 15 HP",
+            SpecialPuyoType.SHIELD: "50% damage reduction",
+            SpecialPuyoType.POISON: "Poison enemy over time",
+            SpecialPuyoType.WILD: "Adapts to adjacent colors",
+            SpecialPuyoType.CHAIN_STARTER: "Guarantees chain start",
+            SpecialPuyoType.BUFF: "30% attack boost",
+            SpecialPuyoType.REFLECT: "Reflects damage back"
+        }
+        
+        return {
+            'type': 'special_puyo',
+            'puyo_type': selected_type,
+            'name': f"{selected_type.value.title()} Puyo",
+            'description': descriptions.get(selected_type, "Special puyo effect"),
+            'rarity': rarity,
+            'icon': icons.get(selected_type, "⭐"),
+            'color': RARITY_COLORS.get(rarity, Colors.WHITE)
+        }
+    
+    def _calculate_special_puyo_price(self, special_puyo_item: dict) -> int:
+        """特殊ぷよの価格を計算（中価格帯）"""
+        base_prices = {
+            Rarity.COMMON: 18,
+            Rarity.UNCOMMON: 25,
+            Rarity.RARE: 35,
+            Rarity.EPIC: 50,
+            Rarity.LEGENDARY: 70
+        }
+        rarity = special_puyo_item.get('rarity', Rarity.COMMON)
+        base_price = base_prices.get(rarity, 18)
+        
+        # ±15%のランダム要素
+        variation = random.uniform(0.85, 1.15)
+        return int(base_price * variation)
+    
+    def _create_heal_potion(self) -> Potion:
+        """基本的な回復ポーションを作成"""
+        return Potion(PotionType.HEALTH, Rarity.COMMON)
     
     def on_enter(self, previous_state):
         """ショップ画面開始"""
@@ -164,6 +273,33 @@ class ShopHandler:
             elif event.key == pygame.K_ESCAPE:
                 # ショップを離れる
                 self._leave_shop()
+        
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # マウスクリックでアイテム購入
+            clicked_index = self._get_clicked_item_index(event.pos)
+            if clicked_index is not None:
+                self.selected_index = clicked_index
+                self._attempt_purchase()
+        
+        elif event.type == pygame.MOUSEMOTION:
+            # マウスホバーで選択インデックス更新
+            hovered_index = self._get_clicked_item_index(event.pos)
+            if hovered_index is not None:
+                self.selected_index = hovered_index
+    
+    def _get_clicked_item_index(self, mouse_pos: tuple) -> Optional[int]:
+        """クリックされたアイテムのインデックスを取得"""
+        mouse_x, mouse_y = mouse_pos
+        
+        for i in range(len(self.shop_items)):
+            x = self.start_x + i * (self.item_width + self.item_spacing)
+            y = self.start_y
+            
+            item_rect = pygame.Rect(x, y, self.item_width, self.item_height)
+            if item_rect.collidepoint(mouse_x, mouse_y):
+                return i
+        
+        return None
     
     def _attempt_purchase(self):
         """購入を試行"""
@@ -190,41 +326,67 @@ class ShopHandler:
             else:
                 logger.info(f"Not enough gold: need {shop_item.price}, have {self.player_gold}")
     
-    def _add_item_to_inventory(self, item: Union[Potion, Artifact]):
+    def _add_item_to_inventory(self, item: Union[Potion, Artifact, dict]):
         """アイテムをインベントリに追加"""
         # プレイヤーのインベントリシステムを実装
         if isinstance(item, Potion):
             # 即座に効果を発揮するポーションは直接適用
-            if item.effect_type == "heal":
+            if item.potion_type == PotionType.HEALTH:
                 self._apply_healing_effect(item)
             else:
-                self.engine.player.add_potion(item)
+                # 他のポーションはインベントリに追加（将来の実装用）
+                logger.info(f"Added potion to inventory: {item.name}")
         elif isinstance(item, Artifact):
-            self.engine.player.add_artifact(item)
-            
-            # 装飾品の効果を即座に適用
+            # アーティファクトの効果を即座に適用
             self._apply_artifact_effect(item)
+            logger.info(f"Applied artifact: {item.name}")
+        elif isinstance(item, dict) and item.get('type') == 'special_puyo':
+            # 特殊ぷよをゲームに追加
+            self._add_special_puyo_to_game(item)
+            logger.info(f"Added special puyo: {item['name']}")
     
     def _apply_healing_effect(self, potion: Potion):
         """回復ポーションの効果を適用"""
-        if potion.effect_type == "heal":
+        if potion.potion_type == PotionType.HEALTH:
             # プレイヤーのHPを回復（最大HPを超えないように）
-            heal_amount = potion.effect_value
+            heal_amount = int(potion.effect.value)
+            old_hp = self.engine.player.hp
             self.engine.player.hp = min(self.engine.player.hp + heal_amount, self.engine.player.max_hp)
-            logger.info(f"Healed {heal_amount} HP. Current HP: {self.engine.player.hp}/{self.engine.player.max_hp}")
+            actual_heal = self.engine.player.hp - old_hp
+            logger.info(f"Healed {actual_heal} HP. Current HP: {self.engine.player.hp}/{self.engine.player.max_hp}")
     
     def _apply_artifact_effect(self, artifact: Artifact):
-        """装飾品の効果を適用"""
-        # 基本的な装飾品効果
-        if artifact.effect_type == "max_hp":
-            self.engine.player.max_hp += artifact.effect_value
-            self.engine.player.hp += artifact.effect_value  # 現在HPも増加
-        elif artifact.effect_type == "damage":
-            self.engine.player.damage_bonus += artifact.effect_value
-        elif artifact.effect_type == "chain":
-            self.engine.player.chain_damage_bonus += artifact.effect_value
+        """アーティファクトの効果を適用"""
+        # アーティファクトの効果をプレイヤーに適用
+        if hasattr(artifact, 'effect_type') and hasattr(artifact, 'effect_value'):
+            if artifact.effect_type == "max_hp":
+                self.engine.player.max_hp += artifact.effect_value
+                self.engine.player.hp += artifact.effect_value  # 現在HPも増加
+            elif artifact.effect_type == "damage":
+                # ダメージボーナスを適用
+                if hasattr(self.engine.player, 'chain_damage_multiplier'):
+                    self.engine.player.chain_damage_multiplier += artifact.effect_value / 100
+            elif artifact.effect_type == "chain":
+                # 連鎖ボーナスを適用
+                if hasattr(self.engine.player, 'chain_damage_multiplier'):
+                    self.engine.player.chain_damage_multiplier += artifact.effect_value / 100
+            
+            logger.info(f"Applied artifact effect: {artifact.effect_type} +{artifact.effect_value}")
+        else:
+            logger.warning(f"Unknown artifact type: {artifact}")
+    
+    def _add_special_puyo_to_game(self, special_puyo_item: dict):
+        """特殊ぷよをゲームに追加（出現率アップ）"""
+        puyo_type = special_puyo_item['puyo_type']
         
-        logger.info(f"Applied artifact effect: {artifact.effect_type} +{artifact.effect_value}")
+        # 特殊ぷよの出現率を一時的に増加
+        from special_puyo.special_puyo import increase_special_puyo_chance
+        increase_special_puyo_chance(2.0)  # 2倍に増加
+        
+        # 購入した特殊ぷよの種類を優先的に出現させるロジックを実装可能
+        # 現在は全体的な出現率アップのみ
+        
+        logger.info(f"Special puyo effect applied: increased spawn rate for {puyo_type.value}")
     
     def _leave_shop(self):
         """ショップを離れてマップに戻る"""
@@ -306,8 +468,8 @@ class ShopHandler:
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 80))
         surface.blit(title_text, title_rect)
         
-        # ゴールド表示
-        gold_text = font_large.render(f"Gold: {self.player_gold}", True, Colors.YELLOW)
+        # ゴールド表示（アイコン付き）
+        gold_text = font_large.render(f"💰 {self.player_gold} Gold", True, Colors.YELLOW)
         gold_rect = gold_text.get_rect(center=(SCREEN_WIDTH // 2, 130))
         surface.blit(gold_text, gold_rect)
     
@@ -355,11 +517,14 @@ class ShopHandler:
                 icon_rect = icon_text.get_rect(center=(x + self.item_width // 2, y + 40))
                 surface.blit(icon_text, icon_rect)
                 
-                # アイテム名
+                # アイテム名（レアリティ色で表示）
                 item_name = shop_item.get_name()
                 if len(item_name) > 15:
                     item_name = item_name[:12] + "..."
-                name_text = font_small.render(item_name, True, Colors.WHITE)
+                
+                # レアリティに応じた色で表示
+                name_color = shop_item.get_color() if not shop_item.sold else Colors.GRAY
+                name_text = font_small.render(item_name, True, name_color)
                 name_text.set_alpha(text_alpha)
                 name_rect = name_text.get_rect(center=(x + self.item_width // 2, y + 80))
                 surface.blit(name_text, name_rect)

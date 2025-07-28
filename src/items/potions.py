@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 class PotionType(Enum):
     """ポーションの種類"""
     HEALTH = "health"              # 体力回復
-    ENERGY = "energy"              # エネルギー回復
     STRENGTH = "strength"          # 攻撃力強化
     DEFENSE = "defense"            # 防御力強化
     SPEED = "speed"                # ぷよ落下速度アップ
@@ -59,7 +58,6 @@ class Potion:
         """ポーション名を取得"""
         names = {
             PotionType.HEALTH: "体力回復ポーション",
-            PotionType.ENERGY: "エネルギーポーション",
             PotionType.STRENGTH: "力のポーション",
             PotionType.DEFENSE: "守りのポーション",
             PotionType.SPEED: "俊敏のポーション",
@@ -90,7 +88,6 @@ class Potion:
         """ポーションの説明を取得"""
         descriptions = {
             PotionType.HEALTH: "HPを回復する",
-            PotionType.ENERGY: "戦闘でのエネルギーを回復",
             PotionType.STRENGTH: "一定時間攻撃力を強化",
             PotionType.DEFENSE: "一定時間防御力を強化",
             PotionType.SPEED: "一定時間ぷよの落下速度アップ",
@@ -121,11 +118,6 @@ class Potion:
                 effect_type="heal",
                 value=30 * rarity_multiplier,
                 description=f"{int(30 * rarity_multiplier)}HP回復"
-            ),
-            PotionType.ENERGY: PotionEffect(
-                effect_type="energy_gain",
-                value=2 * rarity_multiplier,
-                description=f"エネルギー+{int(2 * rarity_multiplier)}"
             ),
             PotionType.STRENGTH: PotionEffect(
                 effect_type="damage_boost",
@@ -192,7 +184,6 @@ class Potion:
         """ポーションの色を取得"""
         colors = {
             PotionType.HEALTH: Colors.RED,
-            PotionType.ENERGY: Colors.YELLOW,
             PotionType.STRENGTH: Colors.ORANGE,
             PotionType.DEFENSE: Colors.BLUE,
             PotionType.SPEED: Colors.GREEN,
@@ -210,21 +201,20 @@ class Potion:
     def _get_icon(self) -> str:
         """ポーションのアイコンを取得"""
         icons = {
-            PotionType.HEALTH: "♥",
-            PotionType.ENERGY: "⚡",
-            PotionType.STRENGTH: "💪",
-            PotionType.DEFENSE: "🛡",
-            PotionType.SPEED: "💨",
-            PotionType.CHAIN_POWER: "🔗",
-            PotionType.COLOR_FOCUS: "🎯",
-            PotionType.SPECIAL_BOOST: "✨",
-            PotionType.FREEZE_TIME: "❄",
-            PotionType.POISON: "☠",
-            PotionType.EXPLOSIVE: "💥",
-            PotionType.RAINBOW: "🌈",
+            PotionType.HEALTH: "H",
+            PotionType.STRENGTH: "S",
+            PotionType.DEFENSE: "D",
+            PotionType.SPEED: "P",
+            PotionType.CHAIN_POWER: "C",
+            PotionType.COLOR_FOCUS: "F",
+            PotionType.SPECIAL_BOOST: "B",
+            PotionType.FREEZE_TIME: "T",
+            PotionType.POISON: "X",
+            PotionType.EXPLOSIVE: "Y",
+            PotionType.RAINBOW: "R",
         }
         
-        return icons.get(self.potion_type, "🧪")
+        return icons.get(self.potion_type, "P")
     
     def use(self, battle_context=None, player=None) -> Dict:
         """ポーションを使用"""

@@ -30,7 +30,6 @@ class ArtifactType(Enum):
     
     # ユーティリティ関連
     HEALING_PENDANT = "healing_pendant"    # 戦闘後回復
-    ENERGY_CRYSTAL = "energy_crystal"      # エネルギー上限アップ
     POTION_BELT = "potion_belt"            # ポーション所持数アップ
     TREASURE_MAP = "treasure_map"          # 報酬増加
     
@@ -86,7 +85,6 @@ class Artifact:
             ArtifactType.LUCKY_CHARM: "幸運のお守り",
             ArtifactType.RAINBOW_CRYSTAL: "虹色の水晶",
             ArtifactType.HEALING_PENDANT: "癒しのペンダント",
-            ArtifactType.ENERGY_CRYSTAL: "エネルギークリスタル",
             ArtifactType.POTION_BELT: "ポーションベルト",
             ArtifactType.TREASURE_MAP: "宝の地図",
             ArtifactType.PHOENIX_FEATHER: "不死鳥の羽根",
@@ -120,7 +118,6 @@ class Artifact:
             ArtifactType.LUCKY_CHARM: "特殊ぷよの出現率が上昇",
             ArtifactType.RAINBOW_CRYSTAL: "定期的に虹ぷよが出現",
             ArtifactType.HEALING_PENDANT: "戦闘勝利時にHP回復",
-            ArtifactType.ENERGY_CRYSTAL: "エネルギー上限が増加",
             ArtifactType.POTION_BELT: "ポーション所持数が増加",
             ArtifactType.TREASURE_MAP: "戦闘報酬が増加",
             ArtifactType.PHOENIX_FEATHER: "死亡時に一度だけ復活",
@@ -222,14 +219,6 @@ class Artifact:
                     description=f"戦闘勝利時HP+{int(20 * rarity_multiplier)}"
                 )
             ],
-            ArtifactType.ENERGY_CRYSTAL: [
-                ArtifactEffect(
-                    effect_type="max_energy_boost",
-                    value=1 + int(rarity_multiplier / 2),
-                    trigger="passive",
-                    description=f"エネルギー上限+{int(1 + rarity_multiplier / 2)}"
-                )
-            ],
             ArtifactType.POTION_BELT: [
                 ArtifactEffect(
                     effect_type="potion_capacity_boost",
@@ -304,7 +293,6 @@ class Artifact:
             ArtifactType.LUCKY_CHARM: Colors.WHITE,
             ArtifactType.RAINBOW_CRYSTAL: Colors.CYAN,
             ArtifactType.HEALING_PENDANT: Colors.GREEN,
-            ArtifactType.ENERGY_CRYSTAL: Colors.YELLOW,
             ArtifactType.POTION_BELT: Colors.ORANGE,
             ArtifactType.TREASURE_MAP: Colors.YELLOW,
             ArtifactType.PHOENIX_FEATHER: Colors.RED,
@@ -318,26 +306,25 @@ class Artifact:
     def _get_icon(self) -> str:
         """装飾品のアイコンを取得"""
         icons = {
-            ArtifactType.POWER_RING: "💍",
-            ArtifactType.DEFENSE_AMULET: "🔮",
-            ArtifactType.VAMPIRE_FANG: "🧛",
-            ArtifactType.BERSERKER_MASK: "😡",
-            ArtifactType.SPEED_BOOTS: "👢",
-            ArtifactType.CHAIN_CROWN: "👑",
-            ArtifactType.COLOR_LENS: "🔍",
-            ArtifactType.LUCKY_CHARM: "🍀",
-            ArtifactType.RAINBOW_CRYSTAL: "💎",
-            ArtifactType.HEALING_PENDANT: "❤",
-            ArtifactType.ENERGY_CRYSTAL: "⚡",
-            ArtifactType.POTION_BELT: "🎒",
-            ArtifactType.TREASURE_MAP: "🗺",
-            ArtifactType.PHOENIX_FEATHER: "🪶",
-            ArtifactType.TIME_SHARD: "⏳",
-            ArtifactType.CURSE_SHIELD: "🛡",
-            ArtifactType.DOUBLE_STRIKE: "⚔",
+            ArtifactType.POWER_RING: "R",
+            ArtifactType.DEFENSE_AMULET: "A",
+            ArtifactType.VAMPIRE_FANG: "V",
+            ArtifactType.BERSERKER_MASK: "M",
+            ArtifactType.SPEED_BOOTS: "B",
+            ArtifactType.CHAIN_CROWN: "C",
+            ArtifactType.COLOR_LENS: "L",
+            ArtifactType.LUCKY_CHARM: "U",
+            ArtifactType.RAINBOW_CRYSTAL: "G",
+            ArtifactType.HEALING_PENDANT: "H",
+            ArtifactType.POTION_BELT: "P",
+            ArtifactType.TREASURE_MAP: "T",
+            ArtifactType.PHOENIX_FEATHER: "F",
+            ArtifactType.TIME_SHARD: "S",
+            ArtifactType.CURSE_SHIELD: "D",
+            ArtifactType.DOUBLE_STRIKE: "W",
         }
         
-        return icons.get(self.artifact_type, "🔧")
+        return icons.get(self.artifact_type, "?")
     
     def trigger_effect(self, trigger_type: str, context: Dict = None) -> List[Dict]:
         """効果を発動"""
