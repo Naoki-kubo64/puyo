@@ -24,7 +24,6 @@ class SpecialPuyoType(Enum):
     HEAL = "heal"              # 回復ぷよ：プレイヤーHP回復
     SHIELD = "shield"          # 盾ぷよ：ダメージ軽減
     POISON = "poison"          # 毒ぷよ：継続ダメージ
-    WILD = "wild"              # ワイルドぷよ：隣接する色に変化
     CHAIN_STARTER = "chain_starter"  # 連鎖開始ぷよ：必ず連鎖を開始
     
     # 新しい特殊ぷよ
@@ -117,11 +116,6 @@ class SpecialPuyo:
                 power=5,  # 毎秒5ダメージ
                 duration=10.0,
                 description="10秒間毎秒5ダメージの毒"
-            ),
-            SpecialPuyoType.WILD: SpecialEffect(
-                effect_type="color_adaptation",
-                power=0,
-                description="隣接するぷよの色に変化"
             ),
             SpecialPuyoType.CHAIN_STARTER: SpecialEffect(
                 effect_type="force_chain",
@@ -222,8 +216,6 @@ class SpecialPuyo:
         elif self.special_type == SpecialPuyoType.LIGHTNING:
             effect_result['affected_positions'] = self._get_lightning_range()
         
-        elif self.special_type == SpecialPuyoType.WILD and puyo_grid:
-            effect_result['new_color'] = self._determine_wild_color(puyo_grid)
         
         # 効果発動後は非アクティブに
         self.active = False
@@ -256,23 +248,6 @@ class SpecialPuyo:
         
         return positions
     
-    def _determine_wild_color(self, puyo_grid) -> PuyoType:
-        """ワイルドぷよの色を決定"""
-        # 隣接するぷよの色を調査
-        adjacent_colors = []
-        
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            nx, ny = self.x + dx, self.y + dy
-            if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
-                color = puyo_grid.get_puyo(nx, ny)
-                if color != PuyoType.EMPTY and color != PuyoType.GARBAGE:
-                    adjacent_colors.append(color)
-        
-        # 最も多い色を選択、なければランダム
-        if adjacent_colors:
-            return max(set(adjacent_colors), key=adjacent_colors.count)
-        else:
-            return random.choice([PuyoType.RED, PuyoType.BLUE, PuyoType.GREEN, PuyoType.YELLOW])
     
     def get_display_color(self) -> tuple:
         """表示色を取得"""
@@ -286,7 +261,6 @@ class SpecialPuyo:
             SpecialPuyoType.HEAL: Colors.GREEN,
             SpecialPuyoType.SHIELD: Colors.BLUE,
             SpecialPuyoType.POISON: Colors.DARK_GRAY,
-            SpecialPuyoType.WILD: Colors.LIGHT_GRAY,
             SpecialPuyoType.CHAIN_STARTER: Colors.RED,
             
             # 新しい特殊ぷよ
@@ -316,7 +290,6 @@ class SpecialPuyo:
             SpecialPuyoType.HEAL: "H",
             SpecialPuyoType.SHIELD: "S",
             SpecialPuyoType.POISON: "P",
-            SpecialPuyoType.WILD: "?",
             SpecialPuyoType.CHAIN_STARTER: "C",
             
             # 新しい特殊ぷよ
@@ -344,7 +317,6 @@ class SpecialPuyoManager:
             SpecialPuyoType.LIGHTNING: 0.12,
             SpecialPuyoType.SHIELD: 0.10,
             SpecialPuyoType.FREEZE: 0.08,
-            SpecialPuyoType.WILD: 0.06,
             SpecialPuyoType.POISON: 0.04,
             SpecialPuyoType.MULTIPLIER: 0.025,
             SpecialPuyoType.RAINBOW: 0.012,

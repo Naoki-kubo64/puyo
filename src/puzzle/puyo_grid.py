@@ -14,6 +14,7 @@ from copy import deepcopy
 
 from core.constants import *
 from core.sound_manager import play_se, SoundType
+from special_puyo.special_puyo import special_puyo_manager
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,9 @@ class PuyoGrid:
         # アニメーション用連鎖統計
         self.animated_chain_level = 0
         self.animated_total_score = 0
+        
+        # 特殊ぷよ画像読み込み
+        self.special_puyo_images = self._load_special_puyo_images()
         self.animated_total_eliminated = 0
         
         logger.info(f"PuyoGrid initialized: {self.width}x{self.height}")
@@ -122,6 +126,11 @@ class PuyoGrid:
             return False
         
         self.grid[x][y] = puyo_type
+        
+        # 通常のぷよが配置された時に特殊ぷよの出現をチェック
+        if puyo_type not in [PuyoType.EMPTY, PuyoType.GARBAGE]:
+            self._check_special_puyo_spawn(x, y)
+        
         return True
     
     def is_empty(self, x: int, y: int) -> bool:
@@ -321,6 +330,8 @@ class PuyoGrid:
         for pos in positions:
             puyo_type = self.get_puyo(pos.x, pos.y)
             if puyo_type != PuyoType.EMPTY:
+                # 特殊ぷよの効果を発動
+                self._trigger_special_puyo_effect(pos.x, pos.y)
                 # 弾けるエフェクト用のパーティクルを生成
                 particles = []
                 center_x = self.offset_x + pos.x * self.puyo_size + self.puyo_size // 2
@@ -750,6 +761,9 @@ class PuyoGrid:
                     continue
                 
                 self._draw_puyo_at(surface, x, y, puyo_type, 255, 1.0)
+                
+                # 特殊ぷよのアイコンを表示
+                self._draw_special_puyo_icon(surface, x, y)
         
         # フェードアウト中のぷよを描画（弾けるエフェクト込み）
         for (x, y), data in self.disappearing_puyos.items():
@@ -962,6 +976,135 @@ class PuyoGrid:
                     line += str(puyo.value)
             lines.append(line)
         return "\n".join(lines)
+    
+    def _check_special_puyo_spawn(self, x: int, y: int):
+        """特殊ぷよの出現をチェック"""
+        if special_puyo_manager.should_spawn_special_puyo():
+            # まだ特殊ぷよが配置されていない位置のみ
+            if not special_puyo_manager.get_special_puyo(x, y):
+                special_puyo_manager.add_special_puyo(x, y)
+                logger.info(f"Special puyo spawned at ({x}, {y})")
+    
+    def get_special_puyo_at(self, x: int, y: int):
+        """指定位置の特殊ぷよを取得"""
+        return special_puyo_manager.get_special_puyo(x, y)
+    
+    def has_special_puyo_at(self, x: int, y: int) -> bool:
+        """指定位置に特殊ぷよがあるかチェック"""
+        return special_puyo_manager.get_special_puyo(x, y) is not None
+    
+    def _load_special_puyo_images(self) -> Dict:
+        """特殊ぷよの画像を読み込み"""
+        images = {}
+        
+        # Picture フォルダから特殊ぷよ画像を読み込み
+        from special_puyo.special_puyo import SpecialPuyoType
+        
+        image_mapping = {
+            SpecialPuyoType.BOMB: "BOMB.png",
+            SpecialPuyoType.LIGHTNING: "LIGHTNING.png",
+            SpecialPuyoType.RAINBOW: "RAINBOW.png",
+            SpecialPuyoType.MULTIPLIER: "Multiplier.png",
+            SpecialPuyoType.FREEZE: "FREEZE.png",
+            SpecialPuyoType.HEAL: "HEAL.png",
+            SpecialPuyoType.SHIELD: "SHIELD.png",
+            SpecialPuyoType.POISON: "POISON.png",  
+            SpecialPuyoType.CHAIN_STARTER: "CHAIN_STARTER.png"
+        }
+        
+        for puyo_type, filename in image_mapping.items():
+            try:
+                image_path = f"Picture/{filename}"
+                image = pygame.image.load(image_path)
+                # ぷよサイズに合わせてスケール（少し小さめにして、ぷよの上に重ねる）
+                scaled_size = int(self.puyo_size * 0.7)
+                images[puyo_type] = pygame.transform.scale(image, (scaled_size, scaled_size))
+                logger.debug(f"Loaded special puyo image: {filename}")
+            except pygame.error as e:
+                logger.warning(f"Failed to load special puyo image {filename}: {e}")
+                # フォールバック：色つきの四角を作成
+                fallback_surface = pygame.Surface((int(self.puyo_size * 0.7), int(self.puyo_size * 0.7)))
+                fallback_surface.fill((255, 255, 255))
+                images[puyo_type] = fallback_surface
+        
+        return images
+    
+    def _draw_special_puyo_icon(self, surface: pygame.Surface, x: int, y: int):
+        """指定位置に特殊ぷよのアイコンを描画"""
+        special_puyo = self.get_special_puyo_at(x, y)
+        if not special_puyo:
+            return
+        
+        # 特殊ぷよ画像を取得
+        special_image = self.special_puyo_images.get(special_puyo.special_type)
+        if not special_image:
+            return
+        
+        # 通常のぷよの上に特殊ぷよアイコンを重ね描き
+        puyo_x = self.offset_x + x * self.puyo_size
+        puyo_y = self.offset_y + y * self.puyo_size
+        
+        # アイコンを中央に配置（ぷよサイズの70%なので、15%ずつオフセット）
+        icon_offset = int(self.puyo_size * 0.15)
+        icon_x = puyo_x + icon_offset
+        icon_y = puyo_y + icon_offset
+        
+        # 特殊ぷよのパルス効果を適用
+        if hasattr(special_puyo, 'pulse_intensity'):
+            # パルス効果で少し明るくする
+            alpha = int(200 + 55 * special_puyo.pulse_intensity)
+            special_image = special_image.copy()
+            special_image.set_alpha(alpha)
+        
+        surface.blit(special_image, (icon_x, icon_y))
+    
+    def _trigger_special_puyo_effect(self, x: int, y: int):
+        """特殊ぷよの効果を発動"""
+        special_puyo = self.get_special_puyo_at(x, y)
+        if not special_puyo:
+            return
+        
+        # 特殊ぷよの効果を実行
+        effect_result = special_puyo.trigger_effect(battle_context=None, puyo_grid=self)
+        
+        if effect_result:
+            logger.info(f"Special puyo effect triggered at ({x}, {y}): {effect_result['description']}")
+            
+            # 効果に応じた処理を実行
+            self._apply_special_effect(effect_result)
+        
+        # 効果発動後は特殊ぷよマネージャーから削除
+        special_puyo_manager.remove_special_puyo(x, y)
+    
+    def _apply_special_effect(self, effect_result: dict):
+        """特殊ぷよの効果を適用"""
+        effect_type = effect_result.get('type')
+        power = effect_result.get('power', 0)
+        position = effect_result.get('position', (0, 0))
+        
+        # 注意: 現在は基本的な効果のみ実装。バトルハンドラーとの連携が必要な効果は後で実装
+        if effect_type == "explosion":
+            # 爆発効果：周囲のぷよを削除
+            affected_positions = effect_result.get('affected_positions', [])
+            for ax, ay in affected_positions:
+                if self.is_valid_position(ax, ay):
+                    self.set_puyo(ax, ay, PuyoType.EMPTY)
+                    # 爆発で削除されたぷよに特殊ぷよがあった場合も削除
+                    special_puyo_manager.remove_special_puyo(ax, ay)
+            logger.info(f"Explosion effect applied: destroyed {len(affected_positions)} puyos")
+        
+        elif effect_type == "lightning_strike":
+            # 雷効果：縦一列を削除
+            affected_positions = effect_result.get('affected_positions', [])
+            for ax, ay in affected_positions:
+                if self.is_valid_position(ax, ay):
+                    self.set_puyo(ax, ay, PuyoType.EMPTY)
+                    special_puyo_manager.remove_special_puyo(ax, ay)
+            logger.info(f"Lightning effect applied: destroyed column with {len(affected_positions)} puyos")
+        
+        # その他の効果は後でバトルハンドラーとの連携で実装
+        else:
+            logger.info(f"Special effect {effect_type} requires battle context integration")
 
 
 if __name__ == "__main__":

@@ -792,6 +792,10 @@ class AuthenticDemoHandler:
         # アニメーション更新
         self.puyo_grid.update_animations(dt)
         
+        # 特殊ぷよ更新
+        from special_puyo.special_puyo import special_puyo_manager
+        special_puyo_manager.update(dt)
+        
         # 継続的なキー入力処理
         self._handle_continuous_input()
         
