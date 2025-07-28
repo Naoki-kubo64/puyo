@@ -786,7 +786,7 @@ class BattleHandler:
         self.top_ui_bar.draw_top_bar(
             surface,
             self.player.hp, self.player.max_hp,
-            self.player.energy, self.player.energy,  # エネルギー
+            0, 0,  # エネルギーは削除済み（ダミー値）
             self.player.gold,   # ゴールド
             self.floor_level
         )
@@ -807,6 +807,9 @@ class BattleHandler:
         
         # ダメージ数値描画
         self._render_damage_numbers(surface)
+        
+        # AOE攻撃インジケーターを表示
+        self._render_aoe_indicator(surface)
         
         # 戦闘結果画面
         if not self.battle_active:
@@ -1186,6 +1189,30 @@ class BattleHandler:
             damage_surface.blit(damage_text, (0, 0))
             
             surface.blit(damage_surface, (number['x'], number['y']))
+    
+    def _render_aoe_indicator(self, surface: pygame.Surface):
+        """AOE攻撃インジケーターを描画"""
+        # 複数色の同時消去をチェック
+        if hasattr(self.puyo_handler.puyo_grid, 'detect_multi_color_elimination'):
+            is_aoe = self.puyo_handler.puyo_grid.detect_multi_color_elimination()
+        else:
+            return
+        
+        if is_aoe:
+            # AOE攻撃可能状態を表示
+            font_medium = self.engine.fonts['medium']
+            aoe_text = font_medium.render("AOE READY!", True, Colors.ORANGE)
+            
+            # 画面右上に表示
+            text_rect = aoe_text.get_rect()
+            text_rect.topright = (SCREEN_WIDTH - 20, 100)
+            
+            # 背景
+            bg_rect = text_rect.inflate(20, 10)
+            pygame.draw.rect(surface, Colors.DARK_GRAY, bg_rect, border_radius=5)
+            pygame.draw.rect(surface, Colors.ORANGE, bg_rect, 3, border_radius=5)
+            
+            surface.blit(aoe_text, text_rect)
     
     def _render_battle_result(self, surface: pygame.Surface):
         """戦闘結果画面を描画"""

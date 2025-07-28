@@ -21,15 +21,20 @@ class MapRenderer:
     def __init__(self, dungeon_map: DungeonMap):
         self.dungeon_map = dungeon_map
         
-        # 描画設定 - 改善されたレイアウト
+        # 描画設定 - 改善されたレイアウト（ステータス表示のため上部余白を増加）
         self.map_area_x = 80
-        self.map_area_y = 100
+        self.map_area_y = 150  # ステータス表示のため上部余白を増加
         self.map_area_width = SCREEN_WIDTH - 160
         self.map_area_height = SCREEN_HEIGHT - 200
         
         # 画像ファイルのロード
         self.node_images = self._load_node_images()
         self.background_image = self._load_background_image()
+        
+        # ステータスアイコンを初期化
+        self.hp_icon = None
+        self.gold_icon = None
+        self._load_status_icons()
         
         # スクロール機能
         self.scroll_y = 0
@@ -70,13 +75,13 @@ class MapRenderer:
         
         # ノードアイコン用シンボル（絵文字対応なし環境でも表示可能）
         self.node_icons = {
-            NodeType.BATTLE: "⚔",
-            NodeType.TREASURE: "♦", 
+            NodeType.BATTLE: "B",
+            NodeType.TREASURE: "T", 
             NodeType.EVENT: "?",
-            NodeType.REST: "♨",
-            NodeType.SHOP: "$",
-            NodeType.BOSS: "♛",
-            NodeType.ELITE: "★",
+            NodeType.REST: "R",
+            NodeType.SHOP: "S",
+            NodeType.BOSS: "BOSS",
+            NodeType.ELITE: "E",
         }
         
         # UI要素
@@ -135,6 +140,31 @@ class MapRenderer:
         
         return images
     
+    def _load_status_icons(self):
+        """ステータスアイコンを読み込み"""
+        try:
+            # プロジェクトルートからのパス
+            base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            
+            # HP.pngを読み込み
+            hp_path = os.path.join(base_path, "HP.png")
+            if os.path.exists(hp_path):
+                self.hp_icon = pygame.image.load(hp_path).convert_alpha()
+                # サイズを調整（30x30ピクセル）
+                self.hp_icon = pygame.transform.scale(self.hp_icon, (30, 30))
+                logger.info("Loaded HP icon for map status")
+            
+            # gold.pngを読み込み
+            gold_path = os.path.join(base_path, "gold.png")
+            if os.path.exists(gold_path):
+                self.gold_icon = pygame.image.load(gold_path).convert_alpha()
+                # サイズを調整（30x30ピクセル）
+                self.gold_icon = pygame.transform.scale(self.gold_icon, (30, 30))
+                logger.info("Loaded Gold icon for map status")
+                
+        except Exception as e:
+            logger.warning(f"Could not load status icons: {e}")
+    
     def _load_background_image(self) -> Optional[pygame.Surface]:
         """背景画像を読み込み"""
         try:
@@ -180,6 +210,9 @@ class MapRenderer:
         
         # UI要素（クリッピング外）
         self._render_ui(surface, fonts)
+        
+        # ステータス表示（新規追加）
+        self._render_status_bar(surface, fonts)
         
         # スクロールバーを描画
         self._render_scrollbar(surface)
@@ -594,6 +627,99 @@ class MapRenderer:
     def set_selected_node(self, node: Optional[DungeonNode]):
         """選択ノードを設定"""
         self.selected_node = node
+    
+    def _render_status_bar(self, surface: pygame.Surface, fonts: Dict[str, pygame.font.Font]):
+        """マップ上部にステータス情報を表示"""
+        # エンジンが参照できない場合はスキップ
+        if not hasattr(self.dungeon_map, 'engine'):
+            return
+        
+        # 背景バー
+        status_bg_rect = pygame.Rect(0, 0, SCREEN_WIDTH, 100)
+        pygame.draw.rect(surface, (20, 20, 30), status_bg_rect)
+        pygame.draw.rect(surface, Colors.GOLD, status_bg_rect, 2)
+        
+        # フォント設定
+        font_small = fonts.get('small', pygame.font.Font(None, 24))
+        font_medium = fonts.get('medium', pygame.font.Font(None, 28))
+        
+        # ステータステキストを用意
+        try:
+            player = self.dungeon_map.engine.player
+            
+            # 基本ステータス
+            hp_text = f"{player.hp}/{player.max_hp}"
+            gold_text = f"{player.gold}"
+            
+            # 特殊アイテム情報
+            special_puyo_count = 0
+            potion_count = 0
+            artifact_count = 0
+            
+            if hasattr(player, 'inventory') and hasattr(player.inventory, 'items'):
+                for item in player.inventory.items:
+                    if hasattr(item, 'item_type') and hasattr(item, 'quantity'):
+                        try:
+                            item_type_str = item.item_type.value if hasattr(item.item_type, 'value') else str(item.item_type)
+                            if item_type_str == 'potion':
+                                potion_count += item.quantity
+                            elif item_type_str == 'artifact':
+                                artifact_count += item.quantity
+                            elif item_type_str == 'special_puyo':
+                                special_puyo_count += item.quantity
+                        except:
+                            continue
+            
+            special_text = f"Special: {special_puyo_count}"
+            potion_text = f"Potions: {potion_count}"
+            artifact_text = f"Artifacts: {artifact_count}"
+            
+            # アイコン付きでHPとゴールドを描画
+            y_pos = 35
+            x_positions = [50, 200, 350, 500, 650]
+            
+            # HP表示（アイコン付き）
+            if self.hp_icon:
+                surface.blit(self.hp_icon, (x_positions[0], y_pos - 5))
+                hp_text_surface = font_medium.render(hp_text, True, Colors.GREEN if player.hp > player.max_hp * 0.3 else Colors.RED)
+                surface.blit(hp_text_surface, (x_positions[0] + 35, y_pos))
+            else:
+                # フォールバック
+                hp_text_full = f"HP: {hp_text}"
+                hp_text_surface = font_medium.render(hp_text_full, True, Colors.GREEN if player.hp > player.max_hp * 0.3 else Colors.RED)
+                surface.blit(hp_text_surface, (x_positions[0], y_pos))
+            
+            # ゴールド表示（アイコン付き）
+            if self.gold_icon:
+                surface.blit(self.gold_icon, (x_positions[1], y_pos - 5))
+                gold_text_surface = font_medium.render(gold_text, True, Colors.YELLOW)
+                surface.blit(gold_text_surface, (x_positions[1] + 35, y_pos))
+            else:
+                # フォールバック
+                gold_text_full = f"Gold: {gold_text}"
+                gold_text_surface = font_medium.render(gold_text_full, True, Colors.YELLOW)
+                surface.blit(gold_text_surface, (x_positions[1], y_pos))
+            
+            # その他のステータス（テキストのみ）
+            other_texts = [special_text, potion_text, artifact_text]
+            other_colors = [Colors.CYAN, Colors.PURPLE, Colors.ORANGE]
+            
+            for i, (text, color) in enumerate(zip(other_texts, other_colors), start=2):
+                if i < len(x_positions):
+                    text_surface = font_medium.render(text, True, color)
+                    surface.blit(text_surface, (x_positions[i], y_pos))
+                    
+            # タイトル
+            title_text = font_medium.render("Status", True, Colors.WHITE)
+            surface.blit(title_text, (10, 5))
+            
+        except Exception as e:
+            # エラー時はシンプルな表示
+            try:
+                error_text = font_small.render("Status info loading...", True, Colors.LIGHT_GRAY)
+                surface.blit(error_text, (50, 25))
+            except:
+                pass  # フォントがない場合は何も表示しない
 
 
 if __name__ == "__main__":

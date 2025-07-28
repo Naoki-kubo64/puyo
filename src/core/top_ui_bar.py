@@ -5,6 +5,7 @@ Slay the Spireスタイルの美しい上部UI表示
 
 import pygame
 import math
+import os
 from typing import Dict, Optional
 from .constants import Colors, SCREEN_WIDTH, FONT_SIZE_SMALL, FONT_SIZE_MEDIUM
 from .game_engine import get_appropriate_font
@@ -28,6 +29,11 @@ class TopUIBar:
         self.hp_pulse = 0
         self.energy_pulse = 0
         self.damage_flash = 0
+        
+        # アイコン画像を読み込み
+        self.hp_icon = None
+        self.gold_icon = None
+        self._load_icons()
     
     def update(self, dt: float):
         """UIアニメーションを更新"""
@@ -38,6 +44,29 @@ class TopUIBar:
         # ダメージフラッシュを減衰
         if self.damage_flash > 0:
             self.damage_flash -= dt * 3
+    
+    def _load_icons(self):
+        """アイコン画像を読み込み"""
+        try:
+            # プロジェクトルートからのパス
+            base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            
+            # HP.pngを読み込み
+            hp_path = os.path.join(base_path, "HP.png")
+            if os.path.exists(hp_path):
+                self.hp_icon = pygame.image.load(hp_path).convert_alpha()
+                # サイズを調整（24x24ピクセル）
+                self.hp_icon = pygame.transform.scale(self.hp_icon, (24, 24))
+            
+            # gold.pngを読み込み
+            gold_path = os.path.join(base_path, "gold.png")
+            if os.path.exists(gold_path):
+                self.gold_icon = pygame.image.load(gold_path).convert_alpha()
+                # サイズを調整（24x24ピクセル）
+                self.gold_icon = pygame.transform.scale(self.gold_icon, (24, 24))
+                
+        except Exception as e:
+            print(f"Warning: Could not load UI icons: {e}")
     
     def trigger_damage_flash(self):
         """ダメージを受けた時のフラッシュエフェクト"""
@@ -52,8 +81,8 @@ class TopUIBar:
         # HP表示
         self._draw_hp_display(surface, player_hp, player_max_hp)
         
-        # エネルギー表示
-        self._draw_energy_display(surface, energy, max_energy)
+        # エネルギー表示（削除済み）
+        # self._draw_energy_display(surface, energy, max_energy)
         
         # ゴールド表示
         self._draw_gold_display(surface, gold)
@@ -91,15 +120,30 @@ class TopUIBar:
         """HP表示を描画"""
         x, y = self.hp_icon_pos
         
-        # HPアイコン（ハート）
-        heart_color = (200, 50, 50) if current_hp > max_hp * 0.3 else (255, 100, 100)
-        if self.damage_flash > 0:
-            flash_intensity = int(self.damage_flash * 255)
-            heart_color = (255, flash_intensity, flash_intensity)
-        
-        # ハートの形
-        heart_size = 12 + int(self.hp_pulse * 2)
-        self._draw_heart(surface, x, y + 10, heart_size, heart_color)
+        # HPアイコン（画像またはハート）
+        if self.hp_icon:
+            # HP.png画像を使用
+            icon_rect = self.hp_icon.get_rect()
+            icon_rect.x = x
+            icon_rect.y = y + 8
+            
+            # ダメージフラッシュ効果
+            if self.damage_flash > 0:
+                # 赤色フラッシュ効果を適用
+                flash_surface = self.hp_icon.copy()
+                flash_surface.fill((255, 100, 100), special_flags=pygame.BLEND_MULT)
+                surface.blit(flash_surface, icon_rect)
+            else:
+                surface.blit(self.hp_icon, icon_rect)
+        else:
+            # フォールバック：ハート描画
+            heart_color = (200, 50, 50) if current_hp > max_hp * 0.3 else (255, 100, 100)
+            if self.damage_flash > 0:
+                flash_intensity = int(self.damage_flash * 255)
+                heart_color = (255, flash_intensity, flash_intensity)
+            
+            heart_size = 12 + int(self.hp_pulse * 2)
+            self._draw_heart(surface, x, y + 10, heart_size, heart_color)
         
         # HP数値
         hp_text = f"{current_hp}/{max_hp}"
@@ -136,7 +180,8 @@ class TopUIBar:
         pygame.draw.rect(surface, (120, 100, 80), bar_bg_rect, 1)
     
     def _draw_energy_display(self, surface: pygame.Surface, current_energy: int, max_energy: int):
-        """エネルギー表示を描画"""
+        """エネルギー表示を描画（削除済み）"""
+        return  # エネルギーシステム削除のため無効化
         x, y = self.energy_icon_pos
         
         # エネルギーオーブ
@@ -179,18 +224,26 @@ class TopUIBar:
         """ゴールド表示を描画"""
         x, y = self.gold_icon_pos
         
-        # ゴールドアイコン（コイン）
-        coin_color = (255, 215, 0)  # ゴールド色
-        
-        # コインの影
-        pygame.draw.circle(surface, (100, 86, 0), (x + 2, y + 12), 12)
-        
-        # メインコイン
-        pygame.draw.circle(surface, coin_color, (x, y + 10), 12)
-        pygame.draw.circle(surface, (255, 255, 150), (x - 3, y + 7), 4)
-        
-        # コインの縁
-        pygame.draw.circle(surface, (200, 170, 0), (x, y + 10), 12, 2)
+        # ゴールドアイコン（画像またはコイン）
+        if self.gold_icon:
+            # gold.png画像を使用
+            icon_rect = self.gold_icon.get_rect()
+            icon_rect.x = x
+            icon_rect.y = y + 8
+            surface.blit(self.gold_icon, icon_rect)
+        else:
+            # フォールバック：コイン描画
+            coin_color = (255, 215, 0)  # ゴールド色
+            
+            # コインの影
+            pygame.draw.circle(surface, (100, 86, 0), (x + 2, y + 12), 12)
+            
+            # メインコイン
+            pygame.draw.circle(surface, coin_color, (x, y + 10), 12)
+            pygame.draw.circle(surface, (255, 255, 150), (x - 3, y + 7), 4)
+            
+            # コインの縁
+            pygame.draw.circle(surface, (200, 170, 0), (x, y + 10), 12, 2)
         
         # ゴールド数値
         gold_text = str(gold)

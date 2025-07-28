@@ -251,6 +251,20 @@ class PuyoGrid:
         
         return chains
     
+    def detect_multi_color_elimination(self) -> bool:
+        """複数色の同時消去を検出（AOE攻撃用）"""
+        chains = self.find_all_chains()
+        
+        if len(chains) < 2:
+            return False
+        
+        # 異なる色の連鎖が同時に発生しているかチェック
+        colors = set()
+        for chain in chains:
+            colors.add(chain.chain_type)
+        
+        return len(colors) >= 2
+    
     def _calculate_chain_score(self, puyo_count: int, puyo_type: PuyoType) -> int:
         """連鎖スコアを計算（従来システム用）"""
         base_score = CHAIN_SCORE_BASE
