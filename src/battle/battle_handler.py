@@ -222,6 +222,10 @@ class BattleHandler:
         self.battle_active = True
         self.battle_result = None  # None, "victory", "defeat"
         
+        # デバッグコマンド用
+        self.debug_input = ""
+        self.debug_mode = True  # デバッグモードを有効にする
+        
         # ダメージ計算はPlayerData.chain_damage_multiplierを使用
         
         # 報酬システム
@@ -704,10 +708,60 @@ class BattleHandler:
                 if target:
                     logger.info(f"Target switched to: {target.get_display_name()}")
                 return
+            
+            # デバッグコマンド入力処理
+            elif self.debug_mode and self.battle_active:
+                if event.key == pygame.K_BACKSPACE:
+                    # バックスペースで文字削除
+                    self.debug_input = self.debug_input[:-1]
+                elif event.key == pygame.K_RETURN:
+                    # エンターでコマンド実行
+                    self._execute_debug_command(self.debug_input.lower())
+                    self.debug_input = ""
+                elif event.unicode.isprintable() and len(self.debug_input) < 10:
+                    # 文字入力
+                    self.debug_input += event.unicode
         
         # ぷよぷよの操作は戦闘中のみ
         if self.battle_active:
             self.puyo_handler.handle_event(event)
+    
+    def _execute_debug_command(self, command: str):
+        """デバッグコマンドを実行"""
+        if command == "kill":
+            # 全ての敵を一撃で倒す
+            for enemy in self.enemy_group.enemies:
+                if enemy.is_alive:
+                    enemy.current_hp = 0
+                    enemy.is_alive = False
+                    logger.info(f"Debug: Killed {enemy.get_display_name()}")
+            
+            # 戦闘終了チェック
+            if self.enemy_group.all_defeated():
+                self._handle_victory()
+                logger.info("Debug: All enemies killed - Victory!")
+        
+        elif command == "heal":
+            # プレイヤーのHPを全回復
+            self.battle_player.current_hp = self.battle_player.max_hp
+            self.player.hp = self.player.max_hp
+            logger.info("Debug: Player fully healed")
+        
+        elif command == "damage":
+            # 敵に1000ダメージ
+            target = self.enemy_group.get_selected_target()
+            if target and target.is_alive:
+                damage = min(1000, target.current_hp)
+                target.take_damage(damage)
+                logger.info(f"Debug: Dealt {damage} damage to {target.get_display_name()}")
+                
+                if target.current_hp <= 0:
+                    target.is_alive = False
+                    if self.enemy_group.all_defeated():
+                        self._handle_victory()
+        
+        else:
+            logger.info(f"Debug: Unknown command '{command}'. Available: kill, heal, damage")
     
     def render(self, surface: pygame.Surface):
         """描画処理"""
@@ -1207,7 +1261,8 @@ class BattleHandler:
             "ぷよぷよ: A/D-移動 S-高速落下 Space-回転",
             "ターゲット: TAB-次の敵 Q-前の敵 クリック-選択",
             "敵情報: 黄色アイコン=次回行動予告 オレンジバー=行動タイマー",
-            "ESC-逃げる"
+            "ESC-逃げる",
+            "デバッグ: killコマンドで敵を一撃で倒す"
         ]
         
         for i, instruction in enumerate(battle_instructions):
@@ -1215,3 +1270,10 @@ class BattleHandler:
             inst_text = inst_font.render(instruction, True, Colors.LIGHT_GRAY)
             inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80 + i * 20))
             surface.blit(inst_text, inst_rect)
+        
+        # デバッグ入力表示
+        if self.debug_mode and self.debug_input:
+            debug_font = get_appropriate_font(self.engine.fonts, f"Debug: {self.debug_input}", 'small')
+            debug_text = debug_font.render(f"Debug: {self.debug_input}", True, Colors.YELLOW)
+            debug_rect = debug_text.get_rect(bottomleft=(10, SCREEN_HEIGHT - 10))
+            surface.blit(debug_text, debug_rect)
