@@ -374,11 +374,7 @@ class DungeonMap:
                 self._convert_battle_to_elite(node)
                 elite_placed = True
                 logger.info(f"Easy route: placed elite at {node.node_id}")
-            elif node.node_type == NodeType.BATTLE and node.floor <= 5 and random.random() < 0.2:
-                # 前半の戦闘の一部を宝箱に変換（報酬アップ、確率を下げる）
-                node.node_type = NodeType.TREASURE
-                node.enemy_type = None
-                logger.debug(f"Easy route: converted battle to treasure at {node.node_id}")
+            # 簡単ルートでは戦闘→宝箱変換を停止（全体バランスを優先）
     
     def _create_medium_route(self, route_path: List[DungeonNode]):
         """中程度ルート：エリート1体（フロア9）、標準的なバランス"""
@@ -545,19 +541,19 @@ class DungeonMap:
         
         for node_type in available_types:
             if node_type == NodeType.BATTLE:
-                weights.append(70)  # 戦闘を更に増加
-            elif node_type == NodeType.TREASURE:
-                weights.append(8)   # 宝箱を更に削減（12→8）
+                weights.append(28)  # 通常戦闘（目標40%）
             elif node_type == NodeType.EVENT:
-                weights.append(15)  # イベントを減らす
-            elif node_type == NodeType.SHOP:
-                weights.append(5)   # ショップを減らす
+                weights.append(22)  # イベント（目標25%）
             elif node_type == NodeType.REST:
-                weights.append(8)   # 休憩所を減らす
+                weights.append(25)  # 休憩所（目標15%）
+            elif node_type == NodeType.SHOP:
+                weights.append(18)  # 商人（目標10%）
             elif node_type == NodeType.ELITE:
-                weights.append(elite_weight)  # フロアに応じて動的に調整（連続出現防止付き）
+                weights.append(8 if elite_weight > 0 else 0)  # エリート（目標7%、ただし連続出現防止適用）
+            elif node_type == NodeType.TREASURE:
+                weights.append(2)   # 宝箱（目標3%）
             else:
-                weights.append(3)
+                weights.append(1)
         
         return weights
     
