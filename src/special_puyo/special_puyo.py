@@ -309,7 +309,7 @@ class SpecialPuyoManager:
     
     def __init__(self):
         self.special_puyos: Dict[Tuple[int, int], SpecialPuyo] = {}
-        self.spawn_chance = 0.05  # 5%の確率で特殊ぷよ生成
+        self.spawn_chance = 0.5  # 50%の確率で特殊ぷよ生成
         self.rarity_weights = {
             # 既存の特殊ぷよ（出現率調整）
             SpecialPuyoType.HEAL: 0.18,
@@ -401,11 +401,11 @@ special_puyo_manager = SpecialPuyoManager()
 
 def increase_special_puyo_chance(multiplier: float):
     """特殊ぷよ出現率を増加"""
-    special_puyo_manager.spawn_chance = min(0.5, special_puyo_manager.spawn_chance * multiplier)
+    special_puyo_manager.spawn_chance = min(0.8, special_puyo_manager.spawn_chance * multiplier)
     logger.info(f"Special puyo spawn chance increased to {special_puyo_manager.spawn_chance:.2%}")
 
 
 def reset_special_puyo_chance():
     """特殊ぷよ出現率をリセット"""
-    special_puyo_manager.spawn_chance = 0.05
-    logger.info("Special puyo spawn chance reset to 5%")
+    special_puyo_manager.spawn_chance = 0.5
+    logger.info("Special puyo spawn chance reset to 50%")

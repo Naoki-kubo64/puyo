@@ -275,7 +275,7 @@ class BattleRewardHandler(StateHandler):
             # 特殊ぷよ出現率を永続的に増加
             from special_puyo.special_puyo import special_puyo_manager
             boost_multiplier = 1.0 + (reward.value / 100.0)  # パーセントを倍率に変換
-            special_puyo_manager.spawn_chance = min(0.5, special_puyo_manager.spawn_chance * boost_multiplier)
+            special_puyo_manager.spawn_chance = min(0.8, special_puyo_manager.spawn_chance * boost_multiplier)
             print(f"特殊ぷよ出現率が{reward.value}%アップ！現在の出現率: {special_puyo_manager.spawn_chance:.1%}")
             
         elif reward.reward_type == RewardType.CHAIN_UPGRADE:
