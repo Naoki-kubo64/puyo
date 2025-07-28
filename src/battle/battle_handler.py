@@ -382,8 +382,7 @@ class BattleHandler:
                 
                 # 全敵が倒されたかチェック
                 if self.enemy_group.is_all_defeated():
-                    self.battle_result = "victory"
-                    self.battle_active = False
+                    self._handle_victory()
                     logger.info("All enemies defeated - Victory!")
             else:
                 logger.warning("No target selected for chain damage!")
@@ -426,8 +425,7 @@ class BattleHandler:
                 logger.info(f"Reflected {reflected_damage} damage to {enemy.get_display_name()}")
                 
                 if enemy_defeated and self.enemy_group.is_all_defeated():
-                    self.battle_result = "victory"
-                    self.battle_active = False
+                    self._handle_victory()
             
             # ダメージ数値表示
             self._add_damage_number(final_damage, Colors.RED, target_player=True)
@@ -652,11 +650,8 @@ class BattleHandler:
             self.battle_active = False
             self._finalize_battle_stats()
         elif self.enemy_group.is_all_defeated():
-            self.battle_result = "victory"
-            self.battle_active = False
+            self._handle_victory()
             self._finalize_battle_stats()
-            # 勝利時の報酬を生成
-            self._generate_victory_rewards()
     
     def handle_event(self, event: pygame.event.Event):
         """イベント処理"""
@@ -762,6 +757,16 @@ class BattleHandler:
         
         else:
             logger.info(f"Debug: Unknown command '{command}'. Available: kill, heal, damage")
+    
+    def _handle_victory(self):
+        """勝利処理"""
+        self.battle_result = "victory"
+        self.battle_active = False
+        
+        # 報酬を生成
+        self._generate_victory_rewards()
+        
+        logger.info("Victory achieved!")
     
     def render(self, surface: pygame.Surface):
         """描画処理"""
