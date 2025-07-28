@@ -709,13 +709,16 @@ class BattleHandler:
                 if event.key == pygame.K_BACKSPACE:
                     # バックスペースで文字削除
                     self.debug_input = self.debug_input[:-1]
+                    return  # デバッグ入力処理後は他の処理をスキップ
                 elif event.key == pygame.K_RETURN:
                     # エンターでコマンド実行
                     self._execute_debug_command(self.debug_input.lower())
                     self.debug_input = ""
+                    return  # デバッグコマンド実行後は他の処理をスキップ
                 elif event.unicode.isprintable() and len(self.debug_input) < 10:
                     # 文字入力
                     self.debug_input += event.unicode
+                    return  # デバッグ入力中は他の処理をスキップ
         
         # ぷよぷよの操作は戦闘中のみ
         if self.battle_active:
