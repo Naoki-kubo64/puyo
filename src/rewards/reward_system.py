@@ -108,21 +108,21 @@ class RewardGenerator:
         
         # 報酬の種類を決定
         available_types = [
-            (RewardType.POTION, 0.4),
-            (RewardType.ARTIFACT, 0.25),
+            (RewardType.POTION, 0.3),
+            (RewardType.ARTIFACT, 0.2),
             (RewardType.HP_UPGRADE, 0.15),
             (RewardType.CHAIN_UPGRADE, 0.15),
-            (RewardType.SPECIAL_PUYO_BOOST, 0.05),
+            (RewardType.SPECIAL_PUYO_BOOST, 0.2),  # 5% → 20%に大幅アップ
         ]
         
         # ボス戦では装飾品の確率アップ
         if is_boss:
             available_types = [
-                (RewardType.ARTIFACT, 0.5),
-                (RewardType.POTION, 0.25),
+                (RewardType.ARTIFACT, 0.4),
+                (RewardType.POTION, 0.2),
                 (RewardType.HP_UPGRADE, 0.15),
-                (RewardType.CHAIN_UPGRADE, 0.08),
-                (RewardType.SPECIAL_PUYO_BOOST, 0.02),
+                (RewardType.CHAIN_UPGRADE, 0.1),
+                (RewardType.SPECIAL_PUYO_BOOST, 0.15),  # 2% → 15%に大幅アップ
             ]
         
         # 報酬選択肢を生成
