@@ -371,12 +371,15 @@ class RewardSelectionHandler:
         font_medium = self.engine.fonts['medium']
         font_small = self.engine.fonts['small']
         
+        # デバッグ情報
+        logger.debug(f"Rendering reward: type={reward.reward_type}, value_type={type(reward.value)}, value={reward.value}")
+        
         # アイコン/値の表示
         icon_y = card_rect.y + 20
         
         if reward.reward_type == RewardType.GOLD:
             # ゴールドアイコン
-            icon_text = font_medium.render("💰", True, Colors.YELLOW)
+            icon_text = font_medium.render("G", True, Colors.YELLOW)
             icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
             surface.blit(icon_text, icon_rect)
             
@@ -387,19 +390,33 @@ class RewardSelectionHandler:
         
         elif reward.reward_type == RewardType.POTION:
             # ポーションアイコン
-            icon_text = font_medium.render(reward.value.icon, True, reward.value.color)
+            if hasattr(reward.value, 'icon') and hasattr(reward.value, 'color'):
+                try:
+                    icon_text = font_medium.render(reward.value.icon, True, reward.value.color)
+                except (UnicodeEncodeError, AttributeError):
+                    icon_text = font_medium.render("P", True, Colors.BLUE)
+            else:
+                # フォールバック：文字列の場合は薬瓶アイコン
+                icon_text = font_medium.render("P", True, Colors.BLUE)
             icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 30))
             surface.blit(icon_text, icon_rect)
         
         elif reward.reward_type == RewardType.ARTIFACT:
             # 装飾品アイコン
-            icon_text = font_medium.render(reward.value.icon, True, reward.value.color)
+            if hasattr(reward.value, 'icon') and hasattr(reward.value, 'color'):
+                try:
+                    icon_text = font_medium.render(reward.value.icon, True, reward.value.color)
+                except (UnicodeEncodeError, AttributeError):
+                    icon_text = font_medium.render("A", True, Colors.PURPLE)
+            else:
+                # フォールバック：文字列の場合は装飾品アイコン
+                icon_text = font_medium.render("A", True, Colors.PURPLE)
             icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 30))
             surface.blit(icon_text, icon_rect)
         
         elif reward.reward_type == RewardType.HP_UPGRADE:
             # HPアイコン
-            icon_text = font_medium.render("❤", True, Colors.RED)
+            icon_text = font_medium.render("H", True, Colors.RED)
             icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
             surface.blit(icon_text, icon_rect)
             
@@ -410,7 +427,7 @@ class RewardSelectionHandler:
         
         else:
             # その他のアイコン
-            icon_text = font_medium.render("🎁", True, reward.get_color())
+            icon_text = font_medium.render("?", True, reward.get_color())
             icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 30))
             surface.blit(icon_text, icon_rect)
         
