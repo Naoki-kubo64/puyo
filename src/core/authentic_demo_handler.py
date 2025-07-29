@@ -1038,12 +1038,12 @@ class AuthenticDemoHandler:
         
         current_time = pygame.time.get_ticks() / 1000.0
         
-        # A/Dキーの継続的な処理（0.25秒間隔で操作しやすい移動速度）
-        if keys[pygame.K_a] and (current_time - self.move_timer) > 0.25:
+        # A/Dキーの継続的な処理（0.12秒間隔で本家に近い移動速度）
+        if keys[pygame.K_a] and (current_time - self.move_timer) > 0.12:
             if self.current_pair.try_move_horizontal(-1, self.puyo_grid):
                 logger.debug("Continuous left move")
                 self.move_timer = current_time
-        elif keys[pygame.K_d] and (current_time - self.move_timer) > 0.25:
+        elif keys[pygame.K_d] and (current_time - self.move_timer) > 0.12:
             if self.current_pair.try_move_horizontal(1, self.puyo_grid):
                 logger.debug("Continuous right move")
                 self.move_timer = current_time
