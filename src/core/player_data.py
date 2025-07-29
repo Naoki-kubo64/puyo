@@ -93,6 +93,9 @@ class PlayerData:
         self.gold: int = 50  # 初期ゴールド
         self.chain_damage_multiplier: float = 1.0
         
+        # 戦闘中の状態
+        self.current_chain_count: int = 1  # 現在の連鎖数（デフォルト1）
+        
         # 統計情報
         self.stats = PlayerStats()
         
@@ -108,7 +111,10 @@ class PlayerData:
         
         # 特殊ぷよ所持状況（初期は基本的な特殊ぷよを所持）
         self.owned_special_puyos: set = set()
+        # 新しいSimpleSpecialTypeシステムの出現率データ
+        self.special_puyo_rates: Dict[str, float] = {}
         self._initialize_special_puyos()
+        self._initialize_special_puyo_rates()
         
         # プレイデータ
         self.current_floor: int = 1
@@ -123,6 +129,16 @@ class PlayerData:
         healed = self.hp - old_hp
         logger.info(f"Player healed for {healed} HP ({old_hp} -> {self.hp})")
         return healed
+    
+    def set_chain_count(self, chain_count: int):
+        """現在の連鎖数を設定"""
+        self.current_chain_count = max(1, chain_count)  # 最低1チェイン
+        logger.debug(f"Chain count set to: {self.current_chain_count}")
+    
+    def reset_chain_count(self):
+        """連鎖数をリセット"""
+        self.current_chain_count = 1
+        logger.debug("Chain count reset to 1")
     
     def take_damage(self, damage: int) -> bool:
         """ダメージを受ける"""
@@ -184,6 +200,54 @@ class PlayerData:
         for puyo_type in initial_puyos:
             self.owned_special_puyos.add(puyo_type)
         logger.info(f"Initialized with special puyos: {[p.value for p in initial_puyos]}")
+    
+    def _initialize_special_puyo_rates(self):
+        """特殊ぷよの出現率を初期化"""
+        from core.simple_special_puyo import SimpleSpecialType, simple_special_manager
+        
+        # プレイヤーデータに保存された出現率をマネージャーに復元
+        if self.special_puyo_rates:
+            for special_type in SimpleSpecialType:
+                rate_key = special_type.value
+                if rate_key in self.special_puyo_rates:
+                    simple_special_manager.type_rates[special_type] = self.special_puyo_rates[rate_key]
+            logger.info(f"Restored special puyo rates from player data")
+        else:
+            # 初回起動時は現在の設定を保存
+            self.save_special_puyo_rates()
+            logger.info(f"Initialized special puyo rates in player data")
+    
+    def save_special_puyo_rates(self):
+        """現在の特殊ぷよ出現率をプレイヤーデータに保存"""
+        from core.simple_special_puyo import SimpleSpecialType, simple_special_manager
+        
+        for special_type in SimpleSpecialType:
+            rate_key = special_type.value
+            self.special_puyo_rates[rate_key] = simple_special_manager.get_type_rate(special_type)
+        
+        logger.debug(f"Saved special puyo rates to player data: {self.special_puyo_rates}")
+    
+    def increase_special_puyo_rate(self, special_type_str: str, increase_amount: float = 0.05):
+        """特殊ぷよの出現率を上昇させ、プレイヤーデータに保存"""
+        from core.simple_special_puyo import SimpleSpecialType, simple_special_manager
+        
+        # 文字列からSimpleSpecialTypeを取得
+        special_type = None
+        for st in SimpleSpecialType:
+            if st.value == special_type_str:
+                special_type = st
+                break
+        
+        if special_type:
+            # マネージャーで出現率を上昇
+            new_rate = simple_special_manager.increase_type_rate(special_type, increase_amount)
+            # プレイヤーデータに保存
+            self.special_puyo_rates[special_type_str] = new_rate
+            logger.info(f"Player data: Increased {special_type_str} rate to {new_rate*100:.0f}%")
+            return new_rate
+        else:
+            logger.warning(f"Unknown special puyo type: {special_type_str}")
+            return 0.0
     
     def level_up_skill(self, skill_name: str, amount: float = 1.0):
         """スキルレベルアップ"""

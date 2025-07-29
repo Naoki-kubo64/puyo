@@ -369,6 +369,8 @@ class PuyoGrid:
                 
                 # グリッドからは即座に削除
                 self.set_puyo(pos.x, pos.y, PuyoType.EMPTY)
+                # 特殊ぷよデータも確実に削除（効果発動されなかった場合のため）
+                self.remove_special_puyo_data(pos.x, pos.y)
                 eliminated_count += 1
         
         # 消去SEを再生（1個以上消去された場合）
@@ -1135,22 +1137,36 @@ class PuyoGrid:
         surface.blit(special_image, (icon_x, icon_y))
     
     def _trigger_special_puyo_effect(self, x: int, y: int):
-        """特殊ぷよの効果を発動"""
-        special_puyo = self.get_special_puyo_at(x, y)
-        if not special_puyo:
+        """特殊ぷよの効果を発動 - SimpleSpecialTypeシステム対応"""
+        # 新しいSimpleSpecialTypeシステム用の処理
+        special_type = self.get_special_puyo_data(x, y)
+        if not special_type:
+            # 古いシステムもチェック（後方互換性）
+            special_puyo = self.get_special_puyo_at(x, y)
+            if not special_puyo:
+                return
+            
+            # 古いシステムの効果実行
+            effect_result = special_puyo.trigger_effect(battle_context=None, puyo_grid=self)
+            if effect_result:
+                logger.info(f"Special puyo effect triggered at ({x}, {y}): {effect_result['description']}")
+                self._apply_special_effect(effect_result)
+            special_puyo_manager.remove_special_puyo(x, y)
             return
         
-        # 特殊ぷよの効果を実行
-        effect_result = special_puyo.trigger_effect(battle_context=None, puyo_grid=self)
+        # 新しいSimpleSpecialTypeシステムの効果実行
+        from core.simple_special_puyo import SimpleSpecialType
+        logger.info(f"SimpleSpecial effect triggered at ({x}, {y}): {special_type}")
         
-        if effect_result:
-            logger.info(f"Special puyo effect triggered at ({x}, {y}): {effect_result['description']}")
-            
-            # 効果に応じた処理を実行
-            self._apply_special_effect(effect_result)
+        if special_type == SimpleSpecialType.HEAL:
+            # HEAL効果: プレイヤーのHPを回復
+            self._apply_heal_effect(10)  # 10HP回復
+        elif special_type == SimpleSpecialType.BOMB:
+            # BOMB効果: 周囲のぷよを破壊
+            self._apply_bomb_effect(x, y, 1)  # 1マス範囲爆発
         
-        # 効果発動後は特殊ぷよマネージャーから削除
-        special_puyo_manager.remove_special_puyo(x, y)
+        # 効果発動後は特殊ぷよデータから削除
+        self.remove_special_puyo_data(x, y)
     
     def _apply_special_effect(self, effect_result: dict):
         """特殊ぷよの効果を適用"""
@@ -1181,6 +1197,87 @@ class PuyoGrid:
         # その他の効果は後でバトルハンドラーとの連携で実装
         else:
             logger.info(f"Special effect {effect_type} requires battle context integration")
+    
+    def _apply_heal_effect(self, heal_amount: int):
+        """HEAL特殊ぷよの効果を適用"""
+        # まずエンジン経由でアクセスを試行
+        if hasattr(self, 'engine') and self.engine:
+            if hasattr(self.engine, 'player'):
+                player = self.engine.player
+                old_hp = player.hp
+                player.heal(heal_amount)
+                new_hp = player.hp
+                logger.info(f"HEAL effect: {old_hp} -> {new_hp} HP (+{new_hp - old_hp})")
+                return
+        
+        # バトルハンドラー経由でアクセスを試行
+        battle_handler = self._get_battle_handler()
+        if battle_handler:
+            player = battle_handler.engine.player
+            battle_player = battle_handler.battle_player
+            old_hp = player.hp
+            player.heal(heal_amount)
+            # バトルプレイヤーとも同期
+            battle_player.current_hp = player.hp
+            new_hp = player.hp
+            logger.info(f"HEAL effect via battle handler: {old_hp} -> {new_hp} HP (+{new_hp - old_hp})")
+            return
+        
+        logger.warning("HEAL effect: No player data available")
+    
+    def _apply_bomb_effect(self, center_x: int, center_y: int, radius: int = 1):
+        """BOMB特殊ぷよの効果を適用 - 全体攻撃バージョン"""
+        # バトルハンドラーを取得
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("BOMB effect: No battle handler available for damage calculation")
+            return
+        
+        # プレイヤーの連鎖数に基づいてダメージを計算
+        player = battle_handler.engine.player
+        chain_count = getattr(player, 'current_chain_count', 1)  # デフォルト1チェイン
+        
+        # プレイヤーの通常ダメージ計算を使用
+        base_damage = 40  # 1チェインの基本ダメージ
+        chain_multiplier = 1.0 + (chain_count - 1) * 0.5  # チェイン倍率
+        damage = int(base_damage * chain_multiplier * player.chain_damage_multiplier)
+        
+        # 全ての敵にダメージを与える
+        enemies_hit = 0
+        if hasattr(battle_handler, 'enemy_group') and battle_handler.enemy_group:
+            for enemy in battle_handler.enemy_group.enemies:
+                # is_alive は プロパティかメソッドかを確認
+                if hasattr(enemy, 'is_alive'):
+                    alive = enemy.is_alive() if callable(enemy.is_alive) else enemy.is_alive
+                else:
+                    alive = enemy.current_hp > 0
+                
+                if alive:
+                    old_hp = enemy.current_hp
+                    enemy.take_damage(damage)
+                    new_hp = enemy.current_hp
+                    logger.info(f"BOMB effect: {enemy.get_display_name()} took {damage} damage ({old_hp} -> {new_hp})")
+                    enemies_hit += 1
+        
+        logger.info(f"BOMB effect: Hit {enemies_hit} enemies for {damage} damage each (chain x{chain_count})")
+    
+    def _get_battle_handler(self):
+        """バトルハンドラーを取得"""
+        # 直接参照があればそれを使用
+        if hasattr(self, 'battle_handler') and self.battle_handler:
+            return self.battle_handler
+        
+        # エンジン経由でバトルハンドラーを取得
+        if hasattr(self, 'engine') and self.engine:
+            current_state = getattr(self.engine, 'current_state', None)
+            if current_state:
+                from core.constants import GameState
+                if current_state == GameState.REAL_BATTLE:
+                    battle_handler = self.engine.state_handlers.get(GameState.REAL_BATTLE)
+                    if battle_handler:
+                        return battle_handler
+        
+        return None
 
 
 if __name__ == "__main__":

@@ -824,6 +824,9 @@ class AuthenticDemoHandler:
         self.puyo_grid = PuyoGrid(engine)
         self.parent_battle_handler = parent_battle_handler  # BattleHandlerへの参照
         
+        # PuyoGridにもバトルハンドラーの参照を追加
+        self.puyo_grid.battle_handler = parent_battle_handler
+        
         # 現在の落下ペア
         self.current_pair: Optional[PuyoPair] = None
         
