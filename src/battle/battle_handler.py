@@ -391,8 +391,10 @@ class BattleHandler:
             target = self.enemy_group.get_selected_target()
             if target:
                 defeated = target.take_damage(modified_damage)
-                self.player.stats.total_damage_dealt += modified_damage
-                self.player.stats.total_chains_made += 1
+                # 統計情報の安全な更新
+                if hasattr(self.player, 'stats') and self.player.stats:
+                    self.player.stats.total_damage_dealt += modified_damage
+                    self.player.stats.total_chains_made += 1
                 
                 # ダメージ数値表示
                 target_pos = self._get_enemy_display_position(target)
@@ -965,8 +967,11 @@ class BattleHandler:
         pygame.draw.rect(surface, (80, 70, 60), stats_bg, 2)
         
         # 統計データ
+        player_stats = getattr(self.player, 'stats', None)
+        total_damage = player_stats.total_damage_dealt if player_stats else 0
+        
         stats = [
-            f"与えたダメージ: {self.player.stats.total_damage_dealt}",
+            f"与えたダメージ: {total_damage}",
             f"連鎖数: {self.puyo_handler.total_chains}",
             f"現在スコア: {self.puyo_handler.total_score}",
         ]
@@ -1016,8 +1021,12 @@ class BattleHandler:
         enemy_area_height = enemy_count * (160 + 10)  # enemy_height + spacing
         stats_y = self.battle_ui_y + enemy_area_height + 20
         
+        # 統計データの安全な取得
+        player_stats = getattr(self.player, 'stats', None)
+        total_damage = player_stats.total_damage_dealt if player_stats else 0
+        
         stats = [
-            f"与えたダメージ: {self.player.stats.total_damage_dealt}",
+            f"与えたダメージ: {total_damage}",
             f"連鎖数: {self.puyo_handler.total_chains}",
             f"現在スコア: {self.puyo_handler.total_score}",
         ]
@@ -1282,8 +1291,11 @@ class BattleHandler:
         surface.blit(subtitle_text, subtitle_rect)
         
         # 統計表示
+        player_stats = getattr(self.player, 'stats', None)
+        total_damage = player_stats.total_damage_dealt if player_stats else 0
+        
         stats = [
-            f"与えたダメージ: {self.player.stats.total_damage_dealt}",
+            f"与えたダメージ: {total_damage}",
             f"作った連鎖: {self.puyo_handler.total_chains}",
             f"最終スコア: {self.puyo_handler.total_score}",
         ]
