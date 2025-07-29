@@ -190,16 +190,10 @@ class PlayerData:
         return len(self.owned_special_puyos) > 0
     
     def _initialize_special_puyos(self):
-        """初期特殊ぷよを設定"""
-        from special_puyo.special_puyo import SpecialPuyoType
-        # 基本的な特殊ぷよを最初から所持
-        initial_puyos = [
-            SpecialPuyoType.HEAL,
-            SpecialPuyoType.BOMB
-        ]
-        for puyo_type in initial_puyos:
-            self.owned_special_puyos.add(puyo_type)
-        logger.info(f"Initialized with special puyos: {[p.value for p in initial_puyos]}")
+        """初期特殊ぷよを設定（初期は所持せず、報酬で獲得）"""
+        # 初期状態では特殊ぷよを所持しない
+        self.owned_special_puyos = set()
+        logger.info("Initialized with no special puyos (acquire through rewards)")
     
     def _initialize_special_puyo_rates(self):
         """特殊ぷよの出現率を初期化"""

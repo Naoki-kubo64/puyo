@@ -62,20 +62,56 @@ class SimpleSpecialPuyo:
 
 
 class SimpleSpecialManager:
-    """シンプルな特殊ぷよマネージャー"""
+    """シンプルな特殊ぷよマネージャー - 個別出現率対応"""
     
     def __init__(self):
         self.special_puyos: Dict[Tuple[int, int], SimpleSpecialPuyo] = {}
-        self.spawn_rate = 0.50  # 50%の確率で特殊ぷよ生成
-        logger.info("SimpleSpecialManager initialized")
+        self.base_spawn_rate = 0.50  # 基本50%の確率で特殊ぷよ生成
+        
+        # 各特殊ぷよタイプの個別出現率（初期値：0%、報酬で獲得）
+        self.type_rates: Dict[SimpleSpecialType, float] = {
+            SimpleSpecialType.HEAL: 0.0,  # 0% - 報酬で獲得
+            SimpleSpecialType.BOMB: 0.0,  # 0% - 報酬で獲得
+        }
+        
+        logger.info(f"SimpleSpecialManager initialized with rates: {self._format_rates()}")
+    
+    def _format_rates(self) -> str:
+        """出現率を文字列で表示"""
+        return ", ".join([f"{t.value}: {r*100:.0f}%" for t, r in self.type_rates.items()])
     
     def should_spawn_special(self) -> bool:
         """特殊ぷよを生成するかどうか判定"""
-        return random.random() < self.spawn_rate
+        return random.random() < self.base_spawn_rate
     
-    def get_random_special_type(self) -> SimpleSpecialType:
-        """ランダムな特殊ぷよタイプを取得"""
-        return random.choice(list(SimpleSpecialType))
+    def get_random_special_type(self) -> Optional[SimpleSpecialType]:
+        """確率に基づいてランダムな特殊ぷよタイプを取得"""
+        # 各タイプの出現率に基づいて重み付き選択
+        types = list(self.type_rates.keys())
+        weights = list(self.type_rates.values())
+        
+        # 重みがすべて0の場合はNoneを返す（特殊ぷよなし）
+        if sum(weights) == 0:
+            return None
+        
+        return random.choices(types, weights=weights)[0]
+    
+    def increase_type_rate(self, special_type: SimpleSpecialType, increase_amount: float = 0.05):
+        """特定タイプの出現率を上昇（デフォルト5%）"""
+        old_rate = self.type_rates[special_type]
+        self.type_rates[special_type] = min(1.0, old_rate + increase_amount)  # 最大100%
+        new_rate = self.type_rates[special_type]
+        
+        logger.info(f"Increased {special_type.value} rate: {old_rate*100:.0f}% -> {new_rate*100:.0f}%")
+        return new_rate
+    
+    def get_type_rate(self, special_type: SimpleSpecialType) -> float:
+        """特定タイプの現在の出現率を取得"""
+        return self.type_rates.get(special_type, 0.0)
+    
+    def get_all_rates(self) -> Dict[SimpleSpecialType, float]:
+        """全タイプの出現率を取得"""
+        return self.type_rates.copy()
     
     def add_special_puyo(self, x: int, y: int, special_type: SimpleSpecialType):
         """特殊ぷよを追加"""
