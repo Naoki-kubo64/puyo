@@ -932,9 +932,14 @@ class AuthenticDemoHandler:
         self.total_score = 0
         self.total_chains = 0
         
-        # ゲーム開始直後に最初のペアをスポーン
-        logger.info("Game reset - spawning initial pair immediately")
-        self._spawn_new_pair()
+        # バトルハンドラーのカウントダウン中でなければ最初のペアをスポーン
+        if (not self.parent_battle_handler or 
+            not hasattr(self.parent_battle_handler, 'countdown_active') or 
+            not self.parent_battle_handler.countdown_active):
+            logger.info("Game reset - spawning initial pair immediately")
+            self._spawn_new_pair()
+        else:
+            logger.info("Game reset - delaying initial pair spawn due to countdown")
     
     def update(self, dt: float):
         """更新処理"""
@@ -1241,17 +1246,7 @@ class AuthenticDemoHandler:
             # 本家風ペア操作（活発なペアがある場合、連鎖中でない場合）
             elif (self.current_pair and self.current_pair.active and 
                   not self.puyo_grid.chain_animation_active):
-                if event.key == pygame.K_a:
-                    # 左移動
-                    if self.current_pair.try_move_horizontal(-1, self.puyo_grid):
-                        logger.debug("Pair moved left")
-                
-                elif event.key == pygame.K_d:
-                    # 右移動
-                    if self.current_pair.try_move_horizontal(1, self.puyo_grid):
-                        logger.debug("Pair moved right")
-                
-                elif event.key == pygame.K_SPACE:
+                if event.key == pygame.K_SPACE:
                     # 時計回り回転（本家の標準操作）
                     logger.debug(f"SPACE pressed - attempting clockwise rotation (current: {self.current_pair.rotation})")
                     if self.current_pair.try_rotate(True, self.puyo_grid):
