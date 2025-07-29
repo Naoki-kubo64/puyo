@@ -70,6 +70,9 @@ class PuyoGrid:
             for _ in range(self.width)
         ]
         
+        # 特殊ぷよ情報の辞書 (x, y) -> SimpleSpecialType
+        self.special_puyo_data: Dict[Tuple[int, int], any] = {}
+        
         # 描画位置
         self.offset_x = GRID_OFFSET_X
         self.offset_y = GRID_OFFSET_Y
@@ -109,6 +112,7 @@ class PuyoGrid:
         self.total_chains = 0
         self.last_chain_score = 0
         self.last_chain_positions.clear()
+        self.special_puyo_data.clear()  # 特殊ぷよ情報もクリア
         logger.info("Grid cleared")
     
     def is_valid_position(self, x: int, y: int) -> bool:
@@ -128,9 +132,10 @@ class PuyoGrid:
         
         self.grid[x][y] = puyo_type
         
-        # 通常のぷよが配置された時に特殊ぷよの出現をチェック
-        if puyo_type not in [PuyoType.EMPTY, PuyoType.GARBAGE]:
-            self._check_special_puyo_spawn(x, y)
+        # 通常のぷよが配置された時に特殊ぷよの出現をチェック（無効化）
+        # 特殊ぷよはPuyoPairの情報に基づいて直接設定されるため、ランダム生成は無し
+        # if puyo_type not in [PuyoType.EMPTY, PuyoType.GARBAGE]:
+        #     self._check_special_puyo_spawn(x, y)
         
         return True
     
@@ -743,8 +748,70 @@ class PuyoGrid:
         # 連結エフェクトを描画
         self._render_connection_effects(surface)
         
+        # 新しいシンプル特殊ぷよシステムのアイコンを描画
+        self._render_simple_special_icons(surface)
+        
         # 枠線を描画
         self._render_border(surface)
+    
+    def set_special_puyo_data(self, x: int, y: int, special_type):
+        """特殊ぷよ情報を設定"""
+        if special_type:
+            self.special_puyo_data[(x, y)] = special_type
+            logger.debug(f"Set special puyo data: {special_type} at ({x}, {y})")
+    
+    def get_special_puyo_data(self, x: int, y: int):
+        """特殊ぷよ情報を取得"""
+        return self.special_puyo_data.get((x, y))
+    
+    def remove_special_puyo_data(self, x: int, y: int):
+        """特殊ぷよ情報を削除"""
+        if (x, y) in self.special_puyo_data:
+            removed = self.special_puyo_data.pop((x, y))
+            logger.debug(f"Removed special puyo data: {removed} at ({x}, {y})")
+    
+    def _render_simple_special_icons(self, surface: pygame.Surface):
+        """特殊ぷよアイコンを描画（PuyoGridの情報を使用）"""
+        try:
+            from core.simple_special_puyo import SimpleSpecialType
+            from special_puyo.special_puyo import SpecialPuyoType
+            
+            for (x, y), special_type in self.special_puyo_data.items():
+                if not special_type:
+                    continue
+                
+                # 特殊ぷよタイプをSpecialPuyoTypeに変換
+                if isinstance(special_type, SimpleSpecialType):
+                    if special_type == SimpleSpecialType.HEAL:
+                        old_type = SpecialPuyoType.HEAL
+                    elif special_type == SimpleSpecialType.BOMB:
+                        old_type = SpecialPuyoType.BOMB
+                    else:
+                        continue
+                else:
+                    continue
+                
+                # 既存の画像を取得
+                icon_image = self.special_puyo_images.get(old_type)
+                if not icon_image:
+                    continue
+                
+                # アイコンサイズを計算（ぷよサイズの70%）
+                icon_size = int(self.puyo_size * 0.7)
+                icon_offset = (self.puyo_size - icon_size) // 2
+                
+                # アイコンを中央に配置
+                puyo_x = self.offset_x + x * self.puyo_size
+                puyo_y = self.offset_y + y * self.puyo_size
+                icon_x = puyo_x + icon_offset
+                icon_y = puyo_y + icon_offset
+                
+                # アイコンを描画
+                scaled_icon = pygame.transform.scale(icon_image, (icon_size, icon_size))
+                surface.blit(scaled_icon, (icon_x, icon_y))
+                
+        except ImportError:
+            pass  # モジュールが利用できない場合は無視
     
     def _render_grid_background(self, surface: pygame.Surface):
         """グリッド背景を描画（透過）"""
@@ -763,8 +830,8 @@ class PuyoGrid:
                 
                 self._draw_puyo_at(surface, x, y, puyo_type, 255, 1.0)
                 
-                # 特殊ぷよのアイコンを表示
-                self._draw_special_puyo_icon(surface, x, y)
+                # 特殊ぷよのアイコンを表示（古いシステム無効化）
+                # self._draw_special_puyo_icon(surface, x, y)
         
         # フェードアウト中のぷよを描画（弾けるエフェクト込み）
         for (x, y), data in self.disappearing_puyos.items():

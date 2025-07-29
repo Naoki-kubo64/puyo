@@ -216,7 +216,7 @@ class BattleHandler:
         self.enemy_group = EnemyGroup(enemies)
         
         # ぷよぷよシステム（AuthenticDemoHandlerをベースに使用）
-        self.puyo_handler = AuthenticDemoHandler(engine)
+        self.puyo_handler = AuthenticDemoHandler(engine, parent_battle_handler=self)
         
         # 戦闘状態
         self.battle_active = True
@@ -232,6 +232,11 @@ class BattleHandler:
         self.reward_generator = RewardGenerator()
         self.reward_handler = None
         self.victory_rewards_generated = False
+        
+        # バトル開始カウントダウンシステム
+        self.countdown_active = True
+        self.countdown_timer = 3.0  # 3秒間のカウントダウン
+        self.countdown_start_time = 3.0
         
         # UI位置 - 敵情報をぷよエリアの右下に配置
         # ぷよエリアの右側、ぷよエリアの下端に合わせる
@@ -294,6 +299,21 @@ class BattleHandler:
         if not self.battle_active:
             return
         
+        # カウントダウン処理
+        if self.countdown_active:
+            self.countdown_timer -= dt
+            if self.countdown_timer <= 0:
+                self.countdown_active = False
+                logger.info("Battle countdown finished - combat started!")
+            else:
+                # カウントダウン中は制限された更新のみ
+                self.background_renderer.update(dt)
+                self.top_ui_bar.update(dt)
+                # NEXTぷよなどの読み込みは継続
+                if hasattr(self.puyo_handler, '_generate_initial_next_queue'):
+                    pass  # NEXTキューの準備は継続
+                return
+        
         # プレイヤー更新（戦闘固有の機能のみ）
         self.battle_player.update(dt)
         
@@ -308,7 +328,7 @@ class BattleHandler:
         # 連鎖によるダメージ処理
         self._check_chain_damage()
         
-        # 敵グループの更新と攻撃
+        # 敵グループの更新と攻撃（カウントダウン終了後のみ）
         enemy_actions = self.enemy_group.update(dt, self.player.hp)
         for enemy, action in enemy_actions:
             self._execute_enemy_action(enemy, action)
@@ -818,6 +838,10 @@ class BattleHandler:
         # AOE攻撃インジケーターを表示
         self._render_aoe_indicator(surface)
         
+        # カウントダウンオーバーレイ（最前面に描画）
+        if self.countdown_active:
+            self._render_countdown_overlay(surface)
+        
         # 戦闘結果画面
         if not self.battle_active:
             self._render_battle_result(surface)
@@ -1319,3 +1343,59 @@ class BattleHandler:
             debug_text = debug_font.render(f"Debug: {self.debug_input}", True, Colors.YELLOW)
             debug_rect = debug_text.get_rect(bottomleft=(10, SCREEN_HEIGHT - 10))
             surface.blit(debug_text, debug_rect)
+    
+    def _render_countdown_overlay(self, surface: pygame.Surface):
+        """バトル開始カウントダウンオーバーレイを描画"""
+        # 半透明の背景オーバーレイ
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(150)
+        overlay.fill(Colors.BLACK)
+        surface.blit(overlay, (0, 0))
+        
+        # カウントダウン表示の計算
+        remaining_time = self.countdown_timer
+        
+        if remaining_time > 2.0:
+            # 3秒台: "3"
+            countdown_text = "3"
+            color = Colors.RED
+        elif remaining_time > 1.0:
+            # 2秒台: "2"
+            countdown_text = "2"
+            color = Colors.YELLOW
+        elif remaining_time > 0.0:
+            # 1秒台: "1"
+            countdown_text = "1"
+            color = Colors.GREEN
+        else:
+            # 0秒: "START"
+            countdown_text = "START"
+            color = Colors.WHITE
+        
+        # 大きなフォントでカウントダウンを描画
+        font_size = 120 if countdown_text != "START" else 80
+        
+        # フォントを取得（大きなサイズ用）
+        try:
+            countdown_font = pygame.font.Font(None, font_size)
+        except:
+            countdown_font = self.engine.fonts['large']
+        
+        # テキストを描画
+        text_surface = countdown_font.render(countdown_text, True, color)
+        text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        
+        # 影効果
+        shadow_surface = countdown_font.render(countdown_text, True, Colors.BLACK)
+        shadow_rect = shadow_surface.get_rect(center=(SCREEN_WIDTH // 2 + 3, SCREEN_HEIGHT // 2 + 3))
+        surface.blit(shadow_surface, shadow_rect)
+        
+        # メインテキスト
+        surface.blit(text_surface, text_rect)
+        
+        # "BATTLE START" サブテキスト
+        if countdown_text == "START":
+            sub_font = self.engine.fonts['medium']
+            sub_text = sub_font.render("BATTLE START", True, Colors.LIGHT_GRAY)
+            sub_rect = sub_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60))
+            surface.blit(sub_text, sub_rect)

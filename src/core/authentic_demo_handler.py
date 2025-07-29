@@ -819,9 +819,10 @@ class PuyoPair:
 class AuthenticDemoHandler:
     """本格ぷよぷよデモハンドラー - 2個ペアで本家と同じ動作"""
     
-    def __init__(self, engine: GameEngine):
+    def __init__(self, engine: GameEngine, parent_battle_handler=None):
         self.engine = engine
         self.puyo_grid = PuyoGrid(engine)
+        self.parent_battle_handler = parent_battle_handler  # BattleHandlerへの参照
         
         # 現在の落下ペア
         self.current_pair: Optional[PuyoPair] = None
@@ -1006,6 +1007,12 @@ class AuthenticDemoHandler:
     
     def _handle_continuous_input(self):
         """継続的なキー入力処理"""
+        # カウントダウン中は操作を無効にする
+        if (self.parent_battle_handler and 
+            hasattr(self.parent_battle_handler, 'countdown_active') and 
+            self.parent_battle_handler.countdown_active):
+            return
+        
         if not self.current_pair or not self.current_pair.active:
             return
         
@@ -1208,6 +1215,15 @@ class AuthenticDemoHandler:
     
     def handle_event(self, event: pygame.event.Event):
         """イベント処理"""
+        # カウントダウン中は操作を無効にする
+        if (self.parent_battle_handler and 
+            hasattr(self.parent_battle_handler, 'countdown_active') and 
+            self.parent_battle_handler.countdown_active):
+            # カウントダウン中はESCAPEキーのみ許可
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.engine.change_state(GameState.MENU)
+            return
+        
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.engine.change_state(GameState.MENU)
