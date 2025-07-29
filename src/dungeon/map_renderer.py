@@ -36,6 +36,10 @@ class MapRenderer:
         self.gold_icon = None
         self._load_status_icons()
         
+        # 特殊ぷよ画像を初期化
+        self.special_puyo_images = {}
+        self._load_special_puyo_images()
+        
         # スクロール機能
         self.scroll_y = 0
         self.max_scroll_y = 0
@@ -164,6 +168,42 @@ class MapRenderer:
                 
         except Exception as e:
             logger.warning(f"Could not load status icons: {e}")
+    
+    def _load_special_puyo_images(self):
+        """特殊ぷよの画像を読み込み"""
+        try:
+            from special_puyo.special_puyo import SpecialPuyoType
+            
+            # Pictureフォルダから特殊ぷよ画像を読み込み
+            base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            
+            image_mapping = {
+                SpecialPuyoType.BOMB: "BOMB.png",
+                SpecialPuyoType.LIGHTNING: "LIGHTNING.png",
+                SpecialPuyoType.RAINBOW: "RAINBOW.png",
+                SpecialPuyoType.MULTIPLIER: "Multiplier.png",
+                SpecialPuyoType.FREEZE: "FREEZE.png",
+                SpecialPuyoType.HEAL: "HEAL.png",
+                SpecialPuyoType.SHIELD: "SHIELD.png",
+                SpecialPuyoType.POISON: "POISON.png",  
+                SpecialPuyoType.CHAIN_STARTER: "CHAIN_STARTER.png"
+            }
+            
+            for puyo_type, filename in image_mapping.items():
+                try:
+                    image_path = os.path.join(base_path, "Picture", filename)
+                    if os.path.exists(image_path):
+                        image = pygame.image.load(image_path).convert_alpha()
+                        # ヘッダー用に小さくスケール（25x25ピクセル）
+                        self.special_puyo_images[puyo_type] = pygame.transform.scale(image, (25, 25))
+                        logger.debug(f"Loaded special puyo image for map header: {filename}")
+                    else:
+                        logger.warning(f"Special puyo image not found: {image_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to load special puyo image {filename}: {e}")
+                    
+        except Exception as e:
+            logger.warning(f"Could not load special puyo images: {e}")
     
     def _load_background_image(self) -> Optional[pygame.Surface]:
         """背景画像を読み込み"""

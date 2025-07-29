@@ -26,9 +26,10 @@ class EventHandler(StateHandler):
         super().__init__(engine)
         self.current_node = current_node
         self.current_event: Optional[RandomEvent] = None
-        self.font_large = pygame.font.Font(None, 48)
-        self.font_medium = pygame.font.Font(None, 36)
-        self.font_small = pygame.font.Font(None, 28)
+        # エンジンの日本語フォントを使用
+        self.font_large = engine.fonts.get('title', pygame.font.Font(None, 48))
+        self.font_medium = engine.fonts.get('medium', pygame.font.Font(None, 36))
+        self.font_small = engine.fonts.get('small', pygame.font.Font(None, 28))
         self.choice_rects: List[pygame.Rect] = []
         self.hovered_choice = -1
         self.event_completed = False

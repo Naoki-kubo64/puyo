@@ -324,12 +324,11 @@ class TreasureHandler:
                 self._apply_artifact_effect(reward.value)
                 logger.info(f"Gained artifact: {reward.value.name}")
         
-        elif reward.reward_type == RewardType.SPECIAL_PUYO_BOOST:
-            # 特殊ぷよ出現率を永続的に増加
-            from special_puyo.special_puyo import special_puyo_manager
-            boost_multiplier = 1.0 + (reward.value / 100.0)  # パーセントを倍率に変換
-            special_puyo_manager.spawn_chance = min(0.8, special_puyo_manager.spawn_chance * boost_multiplier)
-            logger.info(f"Special puyo spawn rate increased by {reward.value}%! Current rate: {special_puyo_manager.spawn_chance:.1%}")
+        elif reward.reward_type == RewardType.SPECIAL_PUYO:
+            # 特殊ぷよをプレイヤーの所持リストに追加
+            special_puyo_type = reward.value
+            self.engine.player.add_special_puyo(special_puyo_type)
+            logger.info(f"New special puyo '{special_puyo_type.value}' acquired!")
         
         elif reward.reward_type == RewardType.CHAIN_UPGRADE:
             # 連鎖ダメージ倍率を上昇

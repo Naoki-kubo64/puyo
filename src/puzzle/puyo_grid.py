@@ -58,8 +58,9 @@ class ChainResult:
 class PuyoGrid:
     """ぷよぷよグリッドの管理クラス"""
     
-    def __init__(self):
+    def __init__(self, engine=None):
         """グリッド初期化"""
+        self.engine = engine
         self.width = GRID_WIDTH
         self.height = GRID_HEIGHT
         
@@ -979,10 +980,18 @@ class PuyoGrid:
     
     def _check_special_puyo_spawn(self, x: int, y: int):
         """特殊ぷよの出現をチェック"""
+        # プレイヤーが特殊ぷよを所持していない場合は出現させない
+        if not self.engine or not hasattr(self.engine, 'player'):
+            return
+        
+        player = self.engine.player
+        if not player.has_any_special_puyo():
+            return
+        
         if special_puyo_manager.should_spawn_special_puyo():
             # まだ特殊ぷよが配置されていない位置のみ
             if not special_puyo_manager.get_special_puyo(x, y):
-                special_puyo_manager.add_special_puyo(x, y)
+                special_puyo_manager.add_special_puyo(x, y, player=player)
                 logger.info(f"Special puyo spawned at ({x}, {y})")
     
     def get_special_puyo_at(self, x: int, y: int):

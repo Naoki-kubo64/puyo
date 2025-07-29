@@ -337,16 +337,28 @@ class SpecialPuyoManager:
         """特殊ぷよを生成するかどうか判定"""
         return random.random() < self.spawn_chance
     
-    def get_random_special_type(self) -> SpecialPuyoType:
-        """ランダムな特殊ぷよタイプを取得"""
+    def get_random_special_type(self, player=None) -> SpecialPuyoType:
+        """ランダムな特殊ぷよタイプを取得（プレイヤーが所持しているもののみ）"""
+        if player and hasattr(player, 'owned_special_puyos') and player.owned_special_puyos:
+            # プレイヤーが所持している特殊ぷよの中からランダム選択
+            owned_types = list(player.owned_special_puyos)
+            owned_weights = [self.rarity_weights.get(puyo_type, 0.1) for puyo_type in owned_types]
+            if sum(owned_weights) > 0:
+                return random.choices(owned_types, weights=owned_weights)[0]
+        
+        # フォールバック：従来通りの選択
         types = list(self.rarity_weights.keys())
         weights = list(self.rarity_weights.values())
         return random.choices(types, weights=weights)[0]
     
-    def add_special_puyo(self, x: int, y: int, special_type: Optional[SpecialPuyoType] = None):
+    def add_special_puyo(self, x: int, y: int, special_type: Optional[SpecialPuyoType] = None, player=None):
         """特殊ぷよを追加"""
         if special_type is None:
-            special_type = self.get_random_special_type()
+            special_type = self.get_random_special_type(player)
+        
+        # プレイヤーが所持していない特殊ぷよは出現させない
+        if player and not player.has_special_puyo(special_type):
+            return
         
         special_puyo = SpecialPuyo(special_type, x, y)
         self.special_puyos[(x, y)] = special_puyo

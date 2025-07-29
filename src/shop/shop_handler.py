@@ -376,17 +376,17 @@ class ShopHandler:
             logger.warning(f"Unknown artifact type: {artifact}")
     
     def _add_special_puyo_to_game(self, special_puyo_item: dict):
-        """特殊ぷよをゲームに追加（出現率アップ）"""
+        """特殊ぷよをゲームに追加（プレイヤーの所持リストに追加）"""
         puyo_type = special_puyo_item['puyo_type']
+        
+        # プレイヤーの所持リストに追加
+        self.engine.player.add_special_puyo(puyo_type)
         
         # 特殊ぷよの出現率を一時的に増加
         from special_puyo.special_puyo import increase_special_puyo_chance
-        increase_special_puyo_chance(2.0)  # 2倍に増加
+        increase_special_puyo_chance(1.5)  # 1.5倍に増加
         
-        # 購入した特殊ぷよの種類を優先的に出現させるロジックを実装可能
-        # 現在は全体的な出現率アップのみ
-        
-        logger.info(f"Special puyo effect applied: increased spawn rate for {puyo_type.value}")
+        logger.info(f"Special puyo acquired and added to player inventory: {puyo_type.value}")
     
     def _leave_shop(self):
         """ショップを離れてマップに戻る"""

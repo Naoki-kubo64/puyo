@@ -673,6 +673,14 @@ class BattleHandler:
                     self.battle_active = False
                 return
             
+            elif event.key == pygame.K_k and self.battle_active:
+                # デバッグ用：Kキーで敵を即座に倒す
+                logger.info("Debug: Kill command activated - defeating all enemies")
+                for enemy in self.enemy_group.enemies:
+                    enemy.current_hp = 0
+                self._check_battle_end()
+                return
+            
             elif event.key == pygame.K_RETURN and not self.battle_active:
                 if self.battle_result == "victory" and self.reward_handler:
                     # 勝利時は報酬選択画面へ

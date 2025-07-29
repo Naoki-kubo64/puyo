@@ -24,7 +24,7 @@ class RewardType(Enum):
     HP_UPGRADE = "hp_upgrade"       # 最大HP増加
     ENERGY_UPGRADE = "energy_upgrade"  # エネルギー増加（削除済み）
     CHAIN_UPGRADE = "chain_upgrade"    # 連鎖ダメージアップ
-    SPECIAL_PUYO_BOOST = "special_puyo_boost"  # 特殊ぷよ出現率アップ
+    SPECIAL_PUYO = "special_puyo"  # 特殊ぷよ獲得
 
 
 @dataclass
@@ -112,7 +112,7 @@ class RewardGenerator:
             (RewardType.ARTIFACT, 0.2),
             (RewardType.HP_UPGRADE, 0.15),
             (RewardType.CHAIN_UPGRADE, 0.15),
-            (RewardType.SPECIAL_PUYO_BOOST, 0.2),  # 5% → 20%に大幅アップ
+            (RewardType.SPECIAL_PUYO, 0.2),  # 5% → 20%に大幅アップ
         ]
         
         # ボス戦では装飾品の確率アップ
@@ -122,18 +122,28 @@ class RewardGenerator:
                 (RewardType.POTION, 0.2),
                 (RewardType.HP_UPGRADE, 0.15),
                 (RewardType.CHAIN_UPGRADE, 0.1),
-                (RewardType.SPECIAL_PUYO_BOOST, 0.15),  # 2% → 15%に大幅アップ
+                (RewardType.SPECIAL_PUYO, 0.15),  # 2% → 15%に大幅アップ
             ]
         
-        # 報酬選択肢を生成
-        for _ in range(choice_count):
-            reward_types = [t[0] for t in available_types]
-            weights = [t[1] for t in available_types]
-            selected_type = random.choices(reward_types, weights=weights)[0]
-            
-            reward = self._generate_specific_reward(selected_type, floor_level)
-            if reward:
-                rewards.append(reward)
+        # 報酬選択肢を生成（必ず特殊ぷよを1つ含む）
+        
+        # まず特殊ぷよ報酬を必ず1つ追加
+        special_puyo_reward = self._generate_specific_reward(RewardType.SPECIAL_PUYO, floor_level)
+        if special_puyo_reward:
+            rewards.append(special_puyo_reward)
+        
+        # 残りの選択肢を通常の確率で生成
+        other_types = [(t[0], t[1]) for t in available_types if t[0] != RewardType.SPECIAL_PUYO]
+        
+        for _ in range(choice_count - 1):  # 特殊ぷよ分を引く
+            if other_types:  # 他のタイプがある場合のみ
+                reward_types = [t[0] for t in other_types]
+                weights = [t[1] for t in other_types]
+                selected_type = random.choices(reward_types, weights=weights)[0]
+                
+                reward = self._generate_specific_reward(selected_type, floor_level)
+                if reward:
+                    rewards.append(reward)
         
         logger.info(f"Generated {len(rewards)} rewards for floor {floor_level}")
         return rewards
@@ -215,13 +225,17 @@ class RewardGenerator:
             # エネルギーシステムは削除済み - 何も返さない
             return None
             
-        elif reward_type == RewardType.SPECIAL_PUYO_BOOST:
-            boost_amount = random.randint(50, 100)  # 50-100%の出現率アップ
+        elif reward_type == RewardType.SPECIAL_PUYO:
+            # ランダムな特殊ぷよタイプを選択
+            from special_puyo.special_puyo import SpecialPuyoType
+            available_types = list(SpecialPuyoType)
+            selected_type = random.choice(available_types)
+            
             return Reward(
-                reward_type=RewardType.SPECIAL_PUYO_BOOST,
-                value=boost_amount,
-                name=f"特殊ぷよ率+{boost_amount}%",
-                description="特殊ぷよの出現確率が永続的に上昇",
+                reward_type=RewardType.SPECIAL_PUYO,
+                value=selected_type,
+                name=f"{selected_type.value.title()} Puyo",
+                description=f"新しい特殊ぷよ『{selected_type.value}』を獲得",
                 rarity=ItemRarity.RARE
             )
         
@@ -460,14 +474,14 @@ class RewardSelectionHandler:
             value_rect = value_text.get_rect(center=(card_rect.centerx, icon_y + 60))
             surface.blit(value_text, value_rect)
         
-        elif reward.reward_type == RewardType.SPECIAL_PUYO_BOOST:
+        elif reward.reward_type == RewardType.SPECIAL_PUYO:
             # 特殊ぷよアイコン
             icon_text = font_medium.render("⭐", True, Colors.YELLOW)
             icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
             surface.blit(icon_text, icon_rect)
             
-            # 出現率増加量
-            value_text = font_medium.render(f"+{reward.value}%", True, Colors.YELLOW)
+            # 特殊ぷよ名
+            value_text = font_small.render(f"{reward.value.value.title()}", True, Colors.YELLOW)
             value_rect = value_text.get_rect(center=(card_rect.centerx, icon_y + 60))
             surface.blit(value_text, value_rect)
         

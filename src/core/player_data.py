@@ -106,6 +106,10 @@ class PlayerData:
         self.buffs: Dict[str, float] = {}
         self.debuffs: Dict[str, float] = {}
         
+        # 特殊ぷよ所持状況（初期は基本的な特殊ぷよを所持）
+        self.owned_special_puyos: set = set()
+        self._initialize_special_puyos()
+        
         # プレイデータ
         self.current_floor: int = 1
         self.current_run_id: str = ""
@@ -153,6 +157,33 @@ class PlayerData:
         self.gold += actual_amount
         self.stats.total_gold_earned += actual_amount
         logger.info(f"Gained {actual_amount} gold (total: {self.gold})")
+    
+    def add_special_puyo(self, special_puyo_type):
+        """特殊ぷよを所持リストに追加"""
+        from special_puyo.special_puyo import SpecialPuyoType
+        if isinstance(special_puyo_type, SpecialPuyoType):
+            self.owned_special_puyos.add(special_puyo_type)
+            logger.info(f"Added special puyo: {special_puyo_type.value}")
+    
+    def has_special_puyo(self, special_puyo_type):
+        """特殊ぷよを所持しているかチェック"""
+        return special_puyo_type in self.owned_special_puyos
+    
+    def has_any_special_puyo(self) -> bool:
+        """何らかの特殊ぷよを所持しているかチェック"""
+        return len(self.owned_special_puyos) > 0
+    
+    def _initialize_special_puyos(self):
+        """初期特殊ぷよを設定"""
+        from special_puyo.special_puyo import SpecialPuyoType
+        # 基本的な特殊ぷよを最初から所持
+        initial_puyos = [
+            SpecialPuyoType.HEAL,
+            SpecialPuyoType.BOMB
+        ]
+        for puyo_type in initial_puyos:
+            self.owned_special_puyos.add(puyo_type)
+        logger.info(f"Initialized with special puyos: {[p.value for p in initial_puyos]}")
     
     def level_up_skill(self, skill_name: str, amount: float = 1.0):
         """スキルレベルアップ"""

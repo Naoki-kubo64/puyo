@@ -20,10 +20,17 @@ logger = logging.getLogger(__name__)
 class PuyoPair:
     """本格的なぷよペア（2個1組）"""
     
-    def __init__(self, main_type: PuyoType, sub_type: PuyoType, center_x: int):
+    def __init__(self, main_type: PuyoType, sub_type: PuyoType, center_x: int, main_special=None, sub_special=None, parent_handler=None):
         # ぷよタイプ
         self.main_type = main_type  # 軸ぷよ（中心）
         self.sub_type = sub_type    # 子ぷよ（回転する）
+        
+        # 特殊ぷよ情報
+        self.main_special = main_special  # 軸ぷよの特殊ぷよタイプ
+        self.sub_special = sub_special    # 子ぷよの特殊ぷよタイプ
+        
+        # 親ハンドラー参照
+        self.parent_handler = parent_handler
         
         # 位置（浮動小数点で滑らかな移動）
         self.center_x = float(center_x)  # 軸ぷよのX座標
@@ -500,20 +507,30 @@ class PuyoPair:
         return False
     
     def _execute_pair_lock(self, grid: PuyoGrid) -> bool:
-        """ペアの固定処理（シンプル版）"""
+        """ペアの固定処理（即座実行版）"""
         main_pos, sub_pos = self.get_positions()
         main_x, main_y = main_pos
         sub_x, sub_y = sub_pos
         
-        logger.info(f"=== EXECUTING PAIR LOCK ===")
-        logger.info(f"Main puyo: ({main_x}, {main_y}) Type: {self.main_type}")
-        logger.info(f"Sub puyo: ({sub_x}, {sub_y}) Type: {self.sub_type}")
+        logger.info(f"=== EXECUTING PAIR LOCK (IMMEDIATE) ===")
+        logger.info(f"Main puyo: ({main_x}, {main_y}) Type: {self.main_type}, Special: {self.main_special}")
+        logger.info(f"Sub puyo: ({sub_x}, {sub_y}) Type: {self.sub_type}, Special: {self.sub_special}")
         
-        # 両方のぷよを同時に固定
+        # 両方のぷよを即座に固定（特殊ぷよマネージャーに即座登録）
         lock_count = 0
         if main_y >= 0:
             try:
+                # 通常のぷよ配置
                 grid.set_puyo(main_x, main_y, self.main_type)
+                
+                # 特殊ぷよの場合は即座に特殊ぷよマネージャーに登録
+                if self.main_special:
+                    parent_handler = self._get_parent_handler()
+                    if parent_handler:
+                        from special_puyo.special_puyo import special_puyo_manager
+                        special_puyo_manager.add_special_puyo(main_x, main_y, self.main_special, parent_handler._get_player())
+                        logger.info(f"✓ Main special puyo IMMEDIATELY registered: {self.main_special.value} at ({main_x}, {main_y})")
+                
                 self.main_fixed = True
                 lock_count += 1
                 logger.info(f"✓ Main puyo LOCKED at ({main_x}, {main_y})")
@@ -522,7 +539,17 @@ class PuyoPair:
         
         if sub_y >= 0:
             try:
+                # 通常のぷよ配置
                 grid.set_puyo(sub_x, sub_y, self.sub_type)
+                
+                # 特殊ぷよの場合は即座に特殊ぷよマネージャーに登録
+                if self.sub_special:
+                    parent_handler = self._get_parent_handler()
+                    if parent_handler:
+                        from special_puyo.special_puyo import special_puyo_manager
+                        special_puyo_manager.add_special_puyo(sub_x, sub_y, self.sub_special, parent_handler._get_player())
+                        logger.info(f"✓ Sub special puyo IMMEDIATELY registered: {self.sub_special.value} at ({sub_x}, {sub_y})")
+                
                 self.sub_fixed = True
                 lock_count += 1
                 logger.info(f"✓ Sub puyo LOCKED at ({sub_x}, {sub_y})")
@@ -567,14 +594,22 @@ class PuyoPair:
                 drop_y = grid.get_drop_position(main_x)
                 # drop_yが有効な範囲内かチェック
                 if 0 <= drop_y < GRID_HEIGHT:
-                    grid.set_puyo(main_x, drop_y, self.main_type)
+                    parent_handler = self._get_parent_handler()
+                    if parent_handler:
+                        parent_handler._place_puyo_with_special(grid, main_x, drop_y, self.main_type, self.main_special)
+                    else:
+                        grid.set_puyo(main_x, drop_y, self.main_type)
                     self.main_fixed = True
                     logger.debug(f"Main puyo immediately dropped to ({main_x}, {drop_y})")
                 else:
                     # 落下位置が無効な場合は現在位置で強制固定
                     current_y = max(0, min(int(self.center_y), GRID_HEIGHT - 1))
                     if grid.can_place_puyo(main_x, current_y):
-                        grid.set_puyo(main_x, current_y, self.main_type)
+                        parent_handler = self._get_parent_handler()
+                        if parent_handler:
+                            parent_handler._place_puyo_with_special(grid, main_x, current_y, self.main_type, self.main_special)
+                        else:
+                            grid.set_puyo(main_x, current_y, self.main_type)
                         self.main_fixed = True
                         logger.debug(f"Main puyo force-fixed at current position ({main_x}, {current_y})")
         
@@ -588,14 +623,22 @@ class PuyoPair:
                 drop_y = grid.get_drop_position(sub_x)
                 # drop_yが有効な範囲内かチェック
                 if 0 <= drop_y < GRID_HEIGHT:
-                    grid.set_puyo(sub_x, drop_y, self.sub_type)
+                    parent_handler = self._get_parent_handler()
+                    if parent_handler:
+                        parent_handler._place_puyo_with_special(grid, sub_x, drop_y, self.sub_type, self.sub_special)
+                    else:
+                        grid.set_puyo(sub_x, drop_y, self.sub_type)
                     self.sub_fixed = True
                     logger.debug(f"Sub puyo immediately dropped to ({sub_x}, {drop_y})")
                 else:
                     # 落下位置が無効な場合は現在位置で強制固定
                     current_y = max(0, min(current_sub_pos[1], GRID_HEIGHT - 1))
                     if current_y >= 0 and grid.can_place_puyo(sub_x, current_y):
-                        grid.set_puyo(sub_x, current_y, self.sub_type)
+                        parent_handler = self._get_parent_handler()
+                        if parent_handler:
+                            parent_handler._place_puyo_with_special(grid, sub_x, current_y, self.sub_type, self.sub_special)
+                        else:
+                            grid.set_puyo(sub_x, current_y, self.sub_type)
                         self.sub_fixed = True
                         logger.debug(f"Sub puyo force-fixed at current position ({sub_x}, {current_y})")
     
@@ -678,6 +721,33 @@ class PuyoPair:
         highlight_radius = radius // 3
         highlight_center = (center[0] - radius//3, center[1] - radius//3)
         pygame.draw.circle(surface, Colors.WHITE, highlight_center, highlight_radius)
+        
+        # 特殊ぷよアイコンを描画（落下中でも表示）
+        special_type = self.main_special if is_main else self.sub_special
+        if special_type:
+            self._render_special_puyo_icon(surface, grid, rect, special_type)
+    
+    def _render_special_puyo_icon(self, surface: pygame.Surface, grid: PuyoGrid, puyo_rect: pygame.Rect, special_type):
+        """落下中のぷよに特殊ぷよアイコンを描画"""
+        # 特殊ぷよ画像を取得
+        if not hasattr(grid, 'special_puyo_images'):
+            return
+            
+        special_image = grid.special_puyo_images.get(special_type)
+        if not special_image:
+            return
+        
+        # アイコンを中央に配置（ぷよサイズの70%なので、15%ずつオフセット）
+        icon_offset = int(grid.puyo_size * 0.15)
+        icon_x = puyo_rect.x + icon_offset
+        icon_y = puyo_rect.y + icon_offset
+        
+        # 特殊ぷよ画像を描画
+        surface.blit(special_image, (icon_x, icon_y))
+    
+    def _get_parent_handler(self):
+        """親のAuthenticDemoHandlerインスタンスを取得（特殊ぷよ配置のため）"""
+        return self.parent_handler
 
 
 class AuthenticDemoHandler:
@@ -685,7 +755,7 @@ class AuthenticDemoHandler:
     
     def __init__(self, engine: GameEngine):
         self.engine = engine
-        self.puyo_grid = PuyoGrid()
+        self.puyo_grid = PuyoGrid(engine)
         
         # 現在の落下ペア
         self.current_pair: Optional[PuyoPair] = None
@@ -731,11 +801,16 @@ class AuthenticDemoHandler:
         for i in range(2):  # 3つから2つに減らす
             main_type = random.choice(self.puyo_types)
             sub_type = random.choice(self.puyo_types)
-            self.next_pairs_queue.append((main_type, sub_type))
-        logger.debug(f"Generated initial NEXT queue: {[f'{m.name}+{s.name}' for m, s in self.next_pairs_queue]}")
+            
+            # 特殊ぷよタイプを決定
+            main_special, sub_special = self._determine_special_puyo_types()
+            
+            # (main_type, sub_type, main_special, sub_special) の形式で保存
+            self.next_pairs_queue.append((main_type, sub_type, main_special, sub_special))
+        logger.debug(f"Generated initial NEXT queue: {[f'{m.name}+{s.name}' for m, s, _, _ in self.next_pairs_queue]}")
     
     def _update_next_pair_colors(self):
-        """next_pair_colorsを更新"""
+        """next_pair_colorsを更新(特殊ぷよ情報も含む)"""
         if self.next_pairs_queue:
             self.next_pair_colors = self.next_pairs_queue[0]  # 最初のペアのみ
         else:
@@ -752,10 +827,11 @@ class AuthenticDemoHandler:
         # 新しいペアを末尾に追加
         new_main = random.choice(self.puyo_types)
         new_sub = random.choice(self.puyo_types)
-        self.next_pairs_queue.append((new_main, new_sub))
+        new_main_special, new_sub_special = self._determine_special_puyo_types()
+        self.next_pairs_queue.append((new_main, new_sub, new_main_special, new_sub_special))
         
         logger.debug(f"Used NEXT pair: {next_pair[0].name}+{next_pair[1].name}")
-        logger.debug(f"Updated queue: {[f'{m.name}+{s.name}' for m, s in self.next_pairs_queue]}")
+        logger.debug(f"Updated queue: {[f'{m.name}+{s.name}' for m, s, _, _ in self.next_pairs_queue]}")
         
         # next_pair_colorsを更新
         self._update_next_pair_colors()
@@ -870,6 +946,22 @@ class AuthenticDemoHandler:
         
         keys = pygame.key.get_pressed()
         
+        # 横移動の継続的な処理（移動速度制限付き）
+        if not hasattr(self, 'move_timer'):
+            self.move_timer = 0.0
+        
+        current_time = pygame.time.get_ticks() / 1000.0
+        
+        # A/Dキーの継続的な処理（0.15秒間隔で適度な移動速度）
+        if keys[pygame.K_a] and (current_time - self.move_timer) > 0.15:
+            if self.current_pair.try_move_horizontal(-1, self.puyo_grid):
+                logger.debug("Continuous left move")
+                self.move_timer = current_time
+        elif keys[pygame.K_d] and (current_time - self.move_timer) > 0.15:
+            if self.current_pair.try_move_horizontal(1, self.puyo_grid):
+                logger.debug("Continuous right move")
+                self.move_timer = current_time
+        
         # S キーの継続的な高速落下
         if keys[pygame.K_s]:
             self.current_pair.set_fast_fall(True)
@@ -881,16 +973,22 @@ class AuthenticDemoHandler:
         # 中央からスポーン
         center_x = GRID_WIDTH // 2
         
-        # NEXTから色を取得
-        main_type, sub_type = self._get_next_pair_colors()
+        # NEXTから色と特殊ぷよ情報を取得
+        next_pair_info = self._get_next_pair_with_specials()
+        main_type, sub_type, main_special, sub_special = next_pair_info
         
         # ペア作成
-        new_pair = PuyoPair(main_type, sub_type, center_x)
+        new_pair = PuyoPair(main_type, sub_type, center_x, main_special, sub_special, self)
         
         # 本家風配置可能性チェック
         if self._can_spawn_authentic_pair(new_pair):
             self.current_pair = new_pair
-            logger.info(f"Spawned pair: {main_type.name} (main) + {sub_type.name} (sub)")
+            special_info = ""
+            if main_special or sub_special:
+                special_info = f" [Special: {main_special.value if main_special else 'None'} + {sub_special.value if sub_special else 'None'}]"
+            logger.info(f"Spawned pair: {main_type.name} (main) + {sub_type.name} (sub){special_info}")
+            logger.debug(f"New pair special info - main: {main_special}, sub: {sub_special}")
+            logger.debug(f"PuyoPair created with special types: main_special={new_pair.main_special}, sub_special={new_pair.sub_special}")
             
             # スポーン直後にキー状態をチェック（Sキー継続対応）
             keys = pygame.key.get_pressed()
@@ -901,6 +999,92 @@ class AuthenticDemoHandler:
             # 本家風ゲームオーバー
             self.game_active = False
             logger.info("Authentic Game Over - Cannot spawn new pair at authentic spawn position")
+    
+    def _determine_special_puyo_types(self) -> Tuple[Optional['SpecialPuyoType'], Optional['SpecialPuyoType']]:
+        """プレイヤーが所持している特殊ぷよの中から、落下中のぷよに適用する特殊ぷよタイプを決定"""
+        from special_puyo.special_puyo import special_puyo_manager
+        
+        # プレイヤーを取得
+        player = None
+        if hasattr(self, 'engine') and hasattr(self.engine, 'player'):
+            player = self.engine.player
+        elif hasattr(self.puyo_grid, 'engine') and hasattr(self.puyo_grid.engine, 'player'):
+            player = self.puyo_grid.engine.player
+        
+        logger.debug(f"Player found: {player is not None}")
+        if player:
+            logger.debug(f"Player has special puyos: {player.has_any_special_puyo()}")
+            logger.debug(f"Player owned special puyos: {list(player.owned_special_puyos)}")
+        
+        if not player or not player.has_any_special_puyo():
+            logger.debug("No player or no special puyos - returning None")
+            return None, None
+        
+        # 軸ぷよの特殊ぷよを決定
+        main_special = None
+        if special_puyo_manager.should_spawn_special_puyo():
+            main_special = special_puyo_manager.get_random_special_type(player)
+        
+        # 子ぷよの特殊ぷよを決定
+        sub_special = None
+        if special_puyo_manager.should_spawn_special_puyo():
+            sub_special = special_puyo_manager.get_random_special_type(player)
+        
+        logger.debug(f"Generated special types: main={main_special}, sub={sub_special}")
+        
+        return main_special, sub_special
+    
+    def _get_next_pair_with_specials(self) -> Tuple[PuyoType, PuyoType, Optional['SpecialPuyoType'], Optional['SpecialPuyoType']]:
+        """次のペアの色と特殊ぷよ情報を取得してキューを更新"""
+        if not self.next_pairs_queue:
+            self._generate_initial_next_queue()
+        
+        # 最初のペアを取得（4要素タプル）
+        next_pair = self.next_pairs_queue.pop(0)
+        
+        # 新しいペアを末尾に追加
+        new_main = random.choice(self.puyo_types)
+        new_sub = random.choice(self.puyo_types)
+        new_main_special, new_sub_special = self._determine_special_puyo_types()
+        self.next_pairs_queue.append((new_main, new_sub, new_main_special, new_sub_special))
+        
+        logger.debug(f"Used NEXT pair: {next_pair[0].name}+{next_pair[1].name} (Special: {next_pair[2]}, {next_pair[3]})")
+        logger.debug(f"Updated queue: {[f'{m.name}+{s.name}' for m, s, _, _ in self.next_pairs_queue]}")
+        
+        # next_pair_colorsを更新
+        self._update_next_pair_colors()
+        
+        return next_pair
+    
+    def _place_puyo_with_special(self, grid: PuyoGrid, x: int, y: int, puyo_type: PuyoType, special_type=None):
+        """ぷよを配置し、特殊ぷよの場合は特殊ぷよマネージャーにも登録"""
+        logger.debug(f"Placing puyo at ({x}, {y}): type={puyo_type}, special={special_type}")
+        
+        # 通常のぷよを配置
+        grid.set_puyo(x, y, puyo_type)
+        
+        # 特殊ぷよの場合、特殊ぷよマネージャーに登録
+        if special_type:
+            from special_puyo.special_puyo import special_puyo_manager
+            logger.debug(f"Registering special puyo {special_type.value} at ({x}, {y}) with manager")
+            special_puyo_manager.add_special_puyo(x, y, special_type, self._get_player())
+            
+            # 確認：登録されたかチェック
+            registered_special = special_puyo_manager.get_special_puyo(x, y)
+            if registered_special:
+                logger.debug(f"✓ Special puyo successfully registered at ({x}, {y}): {registered_special.special_type}")
+            else:
+                logger.error(f"✗ Failed to register special puyo at ({x}, {y})")
+        else:
+            logger.debug(f"No special type for puyo at ({x}, {y})")
+    
+    def _get_player(self):
+        """プレイヤーを取得"""
+        if hasattr(self, 'engine') and hasattr(self.engine, 'player'):
+            return self.engine.player
+        elif hasattr(self.puyo_grid, 'engine') and hasattr(self.puyo_grid.engine, 'player'):
+            return self.puyo_grid.engine.player
+        return None
     
     def _can_spawn_authentic_pair(self, pair: PuyoPair) -> bool:
         """本家風ペアスポーン可能性チェック"""
@@ -1148,7 +1332,14 @@ class AuthenticDemoHandler:
         surface.blit(next_title, title_rect)
         
         # 2ペア分のNEXTぷよを描画
-        for i, (main_type, sub_type) in enumerate(self.next_pairs_queue[:2]):
+        for i, pair_info in enumerate(self.next_pairs_queue[:2]):
+            # 4要素タプルから情報を展開
+            if len(pair_info) == 4:
+                main_type, sub_type, main_special, sub_special = pair_info
+            else:
+                # 旧形式との互換性
+                main_type, sub_type = pair_info
+                main_special, sub_special = None, None
             # 各ペアのサイズと位置
             if i == 0:  # 最初のペア（最も近い）
                 puyo_size = 25
@@ -1192,11 +1383,46 @@ class AuthenticDemoHandler:
                 sub_highlight_center = (sub_center[0] - sub_radius//3, sub_center[1] - sub_radius//3)
                 pygame.draw.circle(surface, Colors.WHITE, sub_highlight_center, highlight_radius)
             
+            # 特殊ぷよアイコンを描画
+            self._render_next_special_puyo(surface, main_center, main_special, puyo_size)
+            self._render_next_special_puyo(surface, sub_center, sub_special, puyo_size)
+            
             # ペア番号表示（2番目のみ）
             if i > 0:
                 number_text = font_small.render("2", True, Colors.LIGHT_GRAY)
                 number_rect = number_text.get_rect(centerx=next_area_x + 15, centery=center_y - puyo_size // 2)
                 surface.blit(number_text, number_rect)
+    
+    def _render_next_special_puyo(self, surface: pygame.Surface, puyo_center: tuple, special_type, puyo_size: int):
+        """NEXTぷよに特殊ぷよアイコンを描画"""
+        if not special_type:
+            logger.debug("No special type for NEXT puyo")
+            return
+        
+        logger.debug(f"Rendering NEXT special puyo: {special_type}")
+        
+        # 特殊ぷよ画像を取得
+        if not hasattr(self.puyo_grid, 'special_puyo_images'):
+            logger.debug("PuyoGrid has no special_puyo_images for NEXT")
+            return
+            
+        special_image = self.puyo_grid.special_puyo_images.get(special_type)
+        if not special_image:
+            logger.debug(f"No image found for NEXT special type: {special_type}")
+            return
+        
+        logger.debug(f"Successfully drawing NEXT special puyo icon: {special_type}")
+        
+        # NEXTぷよのサイズに合わせてスケール
+        icon_size = int(puyo_size * 0.6)  # ぷよの60%のサイズ
+        scaled_image = pygame.transform.scale(special_image, (icon_size, icon_size))
+        
+        # アイコンを中央に配置
+        icon_x = puyo_center[0] - icon_size // 2
+        icon_y = puyo_center[1] - icon_size // 2
+        
+        # 特殊ぷよ画像を描画
+        surface.blit(scaled_image, (icon_x, icon_y))
     
     def _render_game_over_overlay(self, surface: pygame.Surface):
         """ゲームオーバーオーバーレイ"""
