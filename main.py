@@ -19,10 +19,10 @@ except ImportError:
     print("Please install pygame: pip install pygame")
     sys.exit(1)
 
-from src.core.game_engine import GameEngine
-from src.core.constants import *
-from src.core.menu_handler import MenuHandler
-from src.puzzle.puyo_grid import PuyoGrid
+from core.game_engine import GameEngine
+from core.constants import *
+from core.menu_handler import MenuHandler
+from puzzle.puyo_grid import PuyoGrid
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,7 @@ class DemoGameHandler:
         """戦闘テストを開始"""
         logger.info("Starting battle test mode...")
         try:
-            from src.battle.battle_handler import BattleHandler
+            from battle.battle_handler import BattleHandler
             
             # 戦闘ハンドラーを作成
             battle_handler = BattleHandler(self.engine, floor_level=2)

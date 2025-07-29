@@ -5,6 +5,7 @@ Slay the Spireスタイルの美しい上部UI表示
 
 import pygame
 import math
+import os
 from typing import Dict, Optional
 from .constants import Colors, SCREEN_WIDTH, FONT_SIZE_SMALL, FONT_SIZE_MEDIUM
 from .game_engine import get_appropriate_font
@@ -20,31 +21,80 @@ class TopUIBar:
         
         # UI要素の位置
         self.hp_icon_pos = (20, 15)
-        self.energy_icon_pos = (200, 15)
         self.gold_icon_pos = (380, 15)
+        self.special_puyo_pos = (560, 15)  # 特殊ぷよ表示位置
         self.floor_icon_pos = (SCREEN_WIDTH - 120, 15)
         
         # アニメーション用
         self.hp_pulse = 0
-        self.energy_pulse = 0
         self.damage_flash = 0
+        
+        # アイコン画像を読み込み
+        self.hp_icon = None
+        self.gold_icon = None
+        self.special_puyo_icons = {}  # 特殊ぷよアイコン辞書
+        self._load_icons()
+        
+        # マウスオーバー用
+        self.hover_info = None
+        self.last_mouse_pos = (0, 0)
     
     def update(self, dt: float):
         """UIアニメーションを更新"""
         self.animation_time += dt
         self.hp_pulse = abs(math.sin(self.animation_time * 2))
-        self.energy_pulse = abs(math.sin(self.animation_time * 1.5))
         
         # ダメージフラッシュを減衰
         if self.damage_flash > 0:
             self.damage_flash -= dt * 3
+    
+    def _load_icons(self):
+        """アイコン画像を読み込み"""
+        try:
+            # プロジェクトルートからのパス
+            base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            
+            # HP.pngを読み込み
+            hp_path = os.path.join(base_path, "HP.png")
+            if os.path.exists(hp_path):
+                self.hp_icon = pygame.image.load(hp_path).convert_alpha()
+                # サイズを調整（24x24ピクセル）
+                self.hp_icon = pygame.transform.scale(self.hp_icon, (24, 24))
+            
+            # gold.pngを読み込み
+            gold_path = os.path.join(base_path, "gold.png")
+            if os.path.exists(gold_path):
+                self.gold_icon = pygame.image.load(gold_path).convert_alpha()
+                # サイズを調整（24x24ピクセル）
+                self.gold_icon = pygame.transform.scale(self.gold_icon, (24, 24))
+            
+            # 特殊ぷよアイコンを読み込み
+            picture_path = os.path.join(base_path, "Picture")
+            special_puyo_files = {
+                "heal": "HEAL.png",
+                "bomb": "BOMB.png",
+                "lightning": "LIGHTNING.png",
+                "shield": "SHIELD.png",
+                "multiplier": "Multiplier.png",
+                "poison": "POISON.png"
+            }
+            
+            for puyo_type, filename in special_puyo_files.items():
+                icon_path = os.path.join(picture_path, filename)
+                if os.path.exists(icon_path):
+                    icon = pygame.image.load(icon_path).convert_alpha()
+                    # UIバー用に小さくリサイズ（20x20ピクセル）
+                    self.special_puyo_icons[puyo_type] = pygame.transform.scale(icon, (20, 20))
+                
+        except Exception as e:
+            print(f"Warning: Could not load UI icons: {e}")
     
     def trigger_damage_flash(self):
         """ダメージを受けた時のフラッシュエフェクト"""
         self.damage_flash = 1.0
     
     def draw_top_bar(self, surface: pygame.Surface, player_hp: int, player_max_hp: int, 
-                     energy: int, max_energy: int, gold: int, floor: int):
+                     gold: int, floor: int, special_puyo_rates: dict = None):
         """上部UIバーを描画"""
         # 背景バー
         self._draw_background_bar(surface)
@@ -52,17 +102,25 @@ class TopUIBar:
         # HP表示
         self._draw_hp_display(surface, player_hp, player_max_hp)
         
-        # エネルギー表示
-        self._draw_energy_display(surface, energy, max_energy)
+        # エネルギー表示（削除済み）
+        # self._draw_energy_display(surface, energy, max_energy)
         
         # ゴールド表示
         self._draw_gold_display(surface, gold)
+        
+        # 特殊ぷよ表示
+        if special_puyo_rates:
+            self._draw_special_puyo_display(surface, special_puyo_rates)
         
         # フロア表示
         self._draw_floor_display(surface, floor)
         
         # 装飾エレメント
         self._draw_decorative_elements(surface)
+        
+        # マウスオーバー情報表示
+        if self.hover_info:
+            self._draw_hover_tooltip(surface)
     
     def _draw_background_bar(self, surface: pygame.Surface):
         """背景バーを描画"""
@@ -91,15 +149,30 @@ class TopUIBar:
         """HP表示を描画"""
         x, y = self.hp_icon_pos
         
-        # HPアイコン（ハート）
-        heart_color = (200, 50, 50) if current_hp > max_hp * 0.3 else (255, 100, 100)
-        if self.damage_flash > 0:
-            flash_intensity = int(self.damage_flash * 255)
-            heart_color = (255, flash_intensity, flash_intensity)
-        
-        # ハートの形
-        heart_size = 12 + int(self.hp_pulse * 2)
-        self._draw_heart(surface, x, y + 10, heart_size, heart_color)
+        # HPアイコン（画像またはハート）
+        if self.hp_icon:
+            # HP.png画像を使用
+            icon_rect = self.hp_icon.get_rect()
+            icon_rect.x = x
+            icon_rect.y = y + 8
+            
+            # ダメージフラッシュ効果
+            if self.damage_flash > 0:
+                # 赤色フラッシュ効果を適用
+                flash_surface = self.hp_icon.copy()
+                flash_surface.fill((255, 100, 100), special_flags=pygame.BLEND_MULT)
+                surface.blit(flash_surface, icon_rect)
+            else:
+                surface.blit(self.hp_icon, icon_rect)
+        else:
+            # フォールバック：ハート描画
+            heart_color = (200, 50, 50) if current_hp > max_hp * 0.3 else (255, 100, 100)
+            if self.damage_flash > 0:
+                flash_intensity = int(self.damage_flash * 255)
+                heart_color = (255, flash_intensity, flash_intensity)
+            
+            heart_size = 12 + int(self.hp_pulse * 2)
+            self._draw_heart(surface, x, y + 10, heart_size, heart_color)
         
         # HP数値
         hp_text = f"{current_hp}/{max_hp}"
@@ -135,62 +208,31 @@ class TopUIBar:
         # HPバーの縁
         pygame.draw.rect(surface, (120, 100, 80), bar_bg_rect, 1)
     
-    def _draw_energy_display(self, surface: pygame.Surface, current_energy: int, max_energy: int):
-        """エネルギー表示を描画"""
-        x, y = self.energy_icon_pos
-        
-        # エネルギーオーブ
-        orb_size = 15 + int(self.energy_pulse * 2)
-        orb_color = (100, 150, 255)
-        
-        # 外側の光
-        for r in range(orb_size + 5, orb_size, -1):
-            alpha = max(0, 50 - (r - orb_size) * 10)
-            if alpha > 0:
-                orb_surface = pygame.Surface((r*2, r*2))
-                orb_surface.set_alpha(alpha)
-                pygame.draw.circle(orb_surface, orb_color, (r, r), r)
-                surface.blit(orb_surface, (x - r, y + 10 - r))
-        
-        # メインオーブ
-        pygame.draw.circle(surface, orb_color, (x, y + 10), orb_size)
-        pygame.draw.circle(surface, (150, 200, 255), (x - 3, y + 7), 5)
-        
-        # エネルギー数値
-        energy_text = f"{current_energy}/{max_energy}"
-        energy_font = get_appropriate_font(self.fonts, energy_text, 'medium')
-        energy_surface = energy_font.render(energy_text, True, Colors.WHITE)
-        surface.blit(energy_surface, (x + 25, y + 5))
-        
-        # エネルギーオーブ（小さい球）
-        orb_y = y + 25
-        for i in range(max_energy):
-            orb_x = x + 25 + i * 15
-            if i < current_energy:
-                # 満杯のオーブ
-                pygame.draw.circle(surface, (100, 150, 255), (orb_x, orb_y), 6)
-                pygame.draw.circle(surface, (150, 200, 255), (orb_x - 2, orb_y - 2), 3)
-            else:
-                # 空のオーブ
-                pygame.draw.circle(surface, (50, 70, 100), (orb_x, orb_y), 6)
-                pygame.draw.circle(surface, (80, 100, 130), (orb_x, orb_y), 6, 1)
     
     def _draw_gold_display(self, surface: pygame.Surface, gold: int):
         """ゴールド表示を描画"""
         x, y = self.gold_icon_pos
         
-        # ゴールドアイコン（コイン）
-        coin_color = (255, 215, 0)  # ゴールド色
-        
-        # コインの影
-        pygame.draw.circle(surface, (100, 86, 0), (x + 2, y + 12), 12)
-        
-        # メインコイン
-        pygame.draw.circle(surface, coin_color, (x, y + 10), 12)
-        pygame.draw.circle(surface, (255, 255, 150), (x - 3, y + 7), 4)
-        
-        # コインの縁
-        pygame.draw.circle(surface, (200, 170, 0), (x, y + 10), 12, 2)
+        # ゴールドアイコン（画像またはコイン）
+        if self.gold_icon:
+            # gold.png画像を使用
+            icon_rect = self.gold_icon.get_rect()
+            icon_rect.x = x
+            icon_rect.y = y + 8
+            surface.blit(self.gold_icon, icon_rect)
+        else:
+            # フォールバック：コイン描画
+            coin_color = (255, 215, 0)  # ゴールド色
+            
+            # コインの影
+            pygame.draw.circle(surface, (100, 86, 0), (x + 2, y + 12), 12)
+            
+            # メインコイン
+            pygame.draw.circle(surface, coin_color, (x, y + 10), 12)
+            pygame.draw.circle(surface, (255, 255, 150), (x - 3, y + 7), 4)
+            
+            # コインの縁
+            pygame.draw.circle(surface, (200, 170, 0), (x, y + 10), 12, 2)
         
         # ゴールド数値
         gold_text = str(gold)
@@ -277,3 +319,96 @@ class TopUIBar:
         pygame.draw.polygon(surface, corner_color, [
             (SCREEN_WIDTH, 0), (SCREEN_WIDTH - corner_size, 0), (SCREEN_WIDTH, corner_size)
         ])
+    
+    def _draw_special_puyo_display(self, surface: pygame.Surface, special_puyo_rates: dict):
+        """特殊ぷよ表示を描画"""
+        x, y = self.special_puyo_pos
+        
+        # "Special Puyos" ラベル
+        label_font = get_appropriate_font(self.fonts, "Special", 'small')
+        label_surface = label_font.render("Special", True, Colors.LIGHT_GRAY)
+        surface.blit(label_surface, (x, y - 5))
+        
+        # 特殊ぷよアイコンを横に並べて表示
+        icon_spacing = 30
+        current_x = x
+        
+        # 出現率が0%より大きい特殊ぷよのみ表示
+        displayed_count = 0
+        for puyo_type, rate in special_puyo_rates.items():
+            if rate > 0.0 and puyo_type in self.special_puyo_icons:
+                icon = self.special_puyo_icons[puyo_type]
+                icon_rect = pygame.Rect(current_x, y + 12, 20, 20)
+                
+                # アイコンを描画
+                surface.blit(icon, icon_rect)
+                
+                # 出現率をパーセントで表示
+                rate_text = f"{rate*100:.0f}%"
+                rate_font = get_appropriate_font(self.fonts, rate_text, 'small')
+                rate_surface = rate_font.render(rate_text, True, Colors.WHITE)
+                surface.blit(rate_surface, (current_x, y + 35))
+                
+                # マウスオーバー検出領域を記録
+                hover_rect = pygame.Rect(current_x - 5, y + 10, 30, 30)
+                mouse_pos = pygame.mouse.get_pos()
+                if hover_rect.collidepoint(mouse_pos):
+                    self.hover_info = {
+                        'type': puyo_type,
+                        'rate': rate,
+                        'pos': (mouse_pos[0] + 10, mouse_pos[1] - 40)
+                    }
+                
+                current_x += icon_spacing
+                displayed_count += 1
+        
+        # 特殊ぷよを持っていない場合は「なし」と表示
+        if displayed_count == 0:
+            no_special_font = get_appropriate_font(self.fonts, "なし", 'small')
+            no_special_surface = no_special_font.render("なし", True, Colors.GRAY)
+            surface.blit(no_special_surface, (current_x, y + 20))
+    
+    def _draw_hover_tooltip(self, surface: pygame.Surface):
+        """マウスオーバー時のツールチップを描画"""
+        if not self.hover_info:
+            return
+        
+        puyo_type = self.hover_info['type']
+        rate = self.hover_info['rate']
+        pos = self.hover_info['pos']
+        
+        # 特殊ぷよの効果説明
+        effects = {
+            'heal': 'HP回復: プレイヤーのHPを10回復',
+            'bomb': '爆弾: 全ての敵に攻撃',
+            'lightning': '雷: 最強の敵1体に強力攻撃',
+            'shield': 'シールド: ダメージを15軽減',
+            'multiplier': '倍率: 攻撃力を50%上昇',
+            'poison': '毒: 全ての敵に継続ダメージ'
+        }
+        
+        effect_text = effects.get(puyo_type, '特殊効果')
+        rate_text = f'出現率: {rate*100:.0f}%'
+        
+        # ツールチップの背景サイズを計算
+        font = get_appropriate_font(self.fonts, effect_text, 'small')
+        effect_surface = font.render(effect_text, True, Colors.WHITE)
+        rate_surface = font.render(rate_text, True, Colors.WHITE)
+        
+        tooltip_width = max(effect_surface.get_width(), rate_surface.get_width()) + 20
+        tooltip_height = 50
+        
+        # ツールチップの背景
+        tooltip_rect = pygame.Rect(pos[0], pos[1], tooltip_width, tooltip_height)
+        pygame.draw.rect(surface, (40, 40, 40), tooltip_rect)
+        pygame.draw.rect(surface, (100, 100, 100), tooltip_rect, 1)
+        
+        # テキストを描画
+        surface.blit(effect_surface, (pos[0] + 10, pos[1] + 5))
+        surface.blit(rate_surface, (pos[0] + 10, pos[1] + 25))
+    
+    def handle_mouse_motion(self, mouse_pos: tuple):
+        """マウス移動イベント処理"""
+        self.last_mouse_pos = mouse_pos
+        # hover_infoは_draw_special_puyo_displayで更新される
+        self.hover_info = None

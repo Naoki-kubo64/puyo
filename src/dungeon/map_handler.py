@@ -5,10 +5,11 @@ Drop Puzzle × Roguelike のダンジョンマップ操作とゲーム状態遷�
 
 import pygame
 import logging
+import random
 from typing import Optional
 
-from ..core.constants import *
-from ..core.game_engine import GameEngine
+from core.constants import *
+from core.game_engine import GameEngine
 from .dungeon_map import DungeonMap, DungeonNode, NodeType
 from .map_renderer import MapRenderer
 
@@ -37,12 +38,17 @@ class DungeonMapHandler:
             # エンジンに保存
             engine.persistent_dungeon_map = self.dungeon_map
         
-        # レンダラー
+        # レンダラー（エンジンへの参照を追加）
         self.map_renderer = MapRenderer(self.dungeon_map)
+        self.map_renderer.dungeon_map.engine = self.engine  # エンジンへの参照を追加
         
         # 状態管理
         self.transition_pending = False
         self.selected_node: Optional[DungeonNode] = None
+        
+        # イベント結果表示用
+        self.event_popup = None
+        self.event_popup_timer = 0.0
         
         # エンジンに確実に保存
         self.engine.persistent_dungeon_map = self.dungeon_map
@@ -69,15 +75,27 @@ class DungeonMapHandler:
     
     def update(self, dt: float):
         """更新処理"""
-        # 特に更新が必要な要素はないが、将来的にアニメーション等で使用
-        pass
+        # イベントポップアップのタイマー更新
+        if self.event_popup and self.event_popup_timer > 0:
+            self.event_popup_timer -= dt
+            if self.event_popup_timer <= 0:
+                self.event_popup = None
     
     def handle_event(self, event: pygame.event.Event):
         """イベント処理"""
+        # イベントポップアップが表示中の場合はクリックで閉じる
+        if self.event_popup and event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            self.event_popup = None
+            self.event_popup_timer = 0.0
+            return
+        
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 # メインメニューに戻る
                 self.engine.change_state(GameState.MENU)
+            elif event.key == pygame.K_i:
+                # インベントリを開く
+                self._open_inventory()
             elif event.key == pygame.K_UP:
                 # 上スクロール
                 self._scroll(-30)
@@ -140,6 +158,10 @@ class DungeonMapHandler:
         # 遷移中の場合はオーバーレイ表示
         if self.transition_pending:
             self._render_transition_overlay(surface)
+        
+        # イベントポップアップを描画
+        if self.event_popup:
+            self._render_event_popup(surface)
     
     def _handle_left_click(self, pos):
         """左クリック処理"""
@@ -164,9 +186,12 @@ class DungeonMapHandler:
     
     def _process_node_selection(self, node: DungeonNode):
         """ノード選択処理"""
-        # 戦闘前には何も変更しない！
-        # 戦闘ハンドラーに現在選択中のノードを渡すだけ
-        logger.info(f"Selected node for battle: {node.node_id}")
+        logger.info(f"Processing node selection: {node.node_id} (type: {node.node_type.value}, visited: {node.visited})")
+        
+        # 既に訪問済みのノードは処理しない
+        if node.visited:
+            logger.info(f"Node {node.node_id} already visited, skipping")
+            return
         
         # ノードタイプに応じて遷移
         if node.node_type == NodeType.BATTLE:
@@ -192,7 +217,7 @@ class DungeonMapHandler:
         self.transition_pending = True
         
         try:
-            from ..battle.battle_handler import BattleHandler
+            from battle.battle_handler import BattleHandler
             
             # 戦闘ハンドラーを作成（現在のノード情報を渡す）
             battle_handler = BattleHandler(self.engine, floor_level=node.floor + 1, current_node=node)
@@ -216,7 +241,7 @@ class DungeonMapHandler:
         self.transition_pending = True
         
         try:
-            from ..battle.battle_handler import BattleHandler
+            from battle.battle_handler import BattleHandler
             
             # ボス戦用の戦闘ハンドラーを作成（現在のノード情報を渡す）
             battle_handler = BattleHandler(self.engine, floor_level=node.floor + 1, current_node=node)
@@ -239,7 +264,7 @@ class DungeonMapHandler:
         self.transition_pending = True
         
         try:
-            from ..battle.battle_handler import BattleHandler
+            from battle.battle_handler import BattleHandler
             
             # エリート戦用の戦闘ハンドラーを作成（現在のノード情報を渡す）
             battle_handler = BattleHandler(self.engine, floor_level=node.floor + 1, current_node=node)
@@ -261,40 +286,217 @@ class DungeonMapHandler:
         logger.info("Opening treasure chest")
         self.transition_pending = True
         
-        # 宝箱報酬の生成と表示
-        # TODO: 宝箱報酬システムとの連携
-        logger.info("Treasure opened - returning to map")
+        try:
+            from treasure.treasure_handler import TreasureHandler
+            
+            # 宝箱ハンドラーを作成
+            treasure_handler = TreasureHandler(self.engine, current_node=node)
+            
+            # 宝箱状態に変更
+            self.engine.register_state_handler(GameState.TREASURE, treasure_handler)
+            self.engine.change_state(GameState.TREASURE)
+            
+            logger.info("Successfully transitioned to treasure chest")
+            
+        except Exception as e:
+            logger.error(f"Failed to transition to treasure chest: {e}")
+            # エラー時は簡易宝箱シミュレーション
+            self._simulate_treasure(node)
+        
         self.transition_pending = False
+    
+    def _simulate_treasure(self, node: DungeonNode):
+        """宝箱シミュレーション（フォールバック）"""
+        # 簡易報酬獲得（新しいプレイヤーデータシステム使用）
+        bonus_gold = random.randint(50, 100)
+        self.engine.player.gain_gold(bonus_gold)
+        
+        # HP強化と回復
+        hp_bonus = random.randint(10, 20)
+        self.engine.player.level_up_skill("max_hp", hp_bonus)
+        self.engine.player.heal(hp_bonus)
+        
+        # 統計情報更新
+        self.engine.player.visit_room("treasure")
+        
+        # マップ進行処理
+        if self.dungeon_map:
+            success = self.dungeon_map.select_node(node.node_id)
+            logger.info(f"Map progression after treasure: {success}")
+        
+        logger.info(f"Treasure simulation: gained {bonus_gold} gold and {hp_bonus} max HP")
+        
+        # 視覚的フィードバック
+        self._show_event_result("宝箱発見", f"{bonus_gold}ゴールドと{hp_bonus}最大HPを獲得！")
     
     def _transition_to_event(self, node: DungeonNode):
         """イベントへの遷移"""
-        logger.info("Entering random event")
+        logger.info(f"Transitioning to event from node {node.node_id}")
         self.transition_pending = True
         
-        # ランダムイベントの実行
-        # TODO: イベントシステムとの連携
-        logger.info("Event completed - returning to map")
+        try:
+            from event.event_handler import EventHandler
+            event_handler = EventHandler(self.engine, current_node=node)
+            self.engine.register_state_handler(GameState.EVENT, event_handler)
+            self.engine.change_state(GameState.EVENT)
+            logger.info("Successfully transitioned to event handler")
+        except Exception as e:
+            logger.error(f"Failed to create event handler: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            # フォールバック：簡易イベント処理
+            self._simulate_event(node)
+        
         self.transition_pending = False
+    
+    def _simulate_event(self, node: DungeonNode):
+        """イベントシステムのフォールバック - 簡単なランダムイベント"""
+        
+        # ランダムイベントのシミュレーション
+        events = [
+            ("幸運の発見", 30, 0, "道端で金貨を発見した！"),
+            ("休憩", 0, 15, "静かな場所で休憩した。"),
+            ("危険な罠", -20, -8, "罠にかかってしまった..."),
+            ("商人との出会い", 50, 0, "親切な商人からボーナスを受け取った！"),
+            ("謎の祝福", 0, 5, "謎の力により体力が向上した！")
+        ]
+        
+        event_name, gold_change, hp_change, message = random.choice(events)
+        
+        # プレイヤーに効果を適用
+        if gold_change != 0:
+            self.engine.player.gold += gold_change
+        if hp_change > 0:
+            self.engine.player.heal(hp_change)
+        elif hp_change < 0:
+            self.engine.player.take_damage(abs(hp_change))
+        
+        # マップ進行処理（visitedマークはselect_node内で実行される）
+        if self.dungeon_map:
+            success = self.dungeon_map.select_node(node.node_id)
+            logger.info(f"Map progression after event: {success}")
+        
+        logger.info(f"Random event: {event_name} - {message}")
+        
+        # 画面に結果を表示するためのシンプルなポップアップを作成
+        self._show_event_result(event_name, message)
+    
+    def _show_event_result(self, event_name: str, message: str):
+        """イベント結果を表示"""
+        self.event_popup = {
+            'title': event_name,
+            'message': message
+        }
+        self.event_popup_timer = 3.0  # 3秒間表示
+        logger.info(f"Showing event popup: {event_name} - {message}")
+    
+    def _render_event_popup(self, surface: pygame.Surface):
+        """イベントポップアップを描画"""
+        if not self.event_popup:
+            return
+        
+        # 半透明背景
+        overlay = pygame.Surface(surface.get_size())
+        overlay.set_alpha(128)
+        overlay.fill(Colors.BLACK)
+        surface.blit(overlay, (0, 0))
+        
+        # ポップアップボックス
+        popup_width = 500
+        popup_height = 200
+        popup_x = (SCREEN_WIDTH - popup_width) // 2
+        popup_y = (SCREEN_HEIGHT - popup_height) // 2
+        
+        popup_rect = pygame.Rect(popup_x, popup_y, popup_width, popup_height)
+        pygame.draw.rect(surface, Colors.UI_BACKGROUND, popup_rect)
+        pygame.draw.rect(surface, Colors.YELLOW, popup_rect, 4)
+        
+        # タイトル
+        title_font = self.engine.fonts.get('large', pygame.font.Font(None, 36))
+        title_text = title_font.render(self.event_popup['title'], True, Colors.YELLOW)
+        title_rect = title_text.get_rect(center=(popup_x + popup_width // 2, popup_y + 50))
+        surface.blit(title_text, title_rect)
+        
+        # メッセージ
+        message_font = self.engine.fonts.get('medium', pygame.font.Font(None, 24))
+        message_text = message_font.render(self.event_popup['message'], True, Colors.WHITE)
+        message_rect = message_text.get_rect(center=(popup_x + popup_width // 2, popup_y + 100))
+        surface.blit(message_text, message_rect)
+        
+        # 操作説明
+        instruction_font = self.engine.fonts.get('small', pygame.font.Font(None, 18))
+        instruction_text = instruction_font.render("クリックして続ける", True, Colors.LIGHT_GRAY)
+        instruction_rect = instruction_text.get_rect(center=(popup_x + popup_width // 2, popup_y + 150))
+        surface.blit(instruction_text, instruction_rect)
     
     def _transition_to_rest(self, node: DungeonNode):
         """休憩所への遷移"""
         logger.info("Entering rest site")
         self.transition_pending = True
         
-        # HP回復とアップグレード選択
-        # TODO: 休憩所システムとの連携
-        logger.info("Rest completed - returning to map")
+        try:
+            from rest.rest_handler import RestHandler
+            
+            # 休憩所ハンドラーを作成
+            rest_handler = RestHandler(self.engine, current_node=node)
+            
+            # 休憩所状態に変更
+            self.engine.register_state_handler(GameState.REST, rest_handler)
+            self.engine.change_state(GameState.REST)
+            
+            logger.info("Successfully transitioned to rest area")
+            
+        except Exception as e:
+            logger.error(f"Failed to transition to rest area: {e}")
+            # エラー時は簡易休憩所シミュレーション
+            self._simulate_rest()
+        
         self.transition_pending = False
+    
+    def _simulate_rest(self):
+        """休憩所シミュレーション（フォールバック）"""
+        # 簡易HP回復
+        heal_amount = self.engine.game_data.player_max_hp // 3
+        old_hp = self.engine.game_data.player_hp
+        self.engine.game_data.player_hp = min(
+            self.engine.game_data.player_max_hp,
+            self.engine.game_data.player_hp + heal_amount
+        )
+        actual_heal = self.engine.game_data.player_hp - old_hp
+        logger.info(f"Rest simulation: healed {actual_heal} HP")
     
     def _transition_to_shop(self, node: DungeonNode):
         """ショップへの遷移"""
         logger.info("Entering shop")
         self.transition_pending = True
         
-        # ショップUIの表示
-        # TODO: ショップシステムとの連携
-        logger.info("Shop visit completed - returning to map")
+        try:
+            from shop.shop_handler import ShopHandler
+            
+            # ショップハンドラーを作成
+            shop_handler = ShopHandler(self.engine, current_node=node)
+            
+            # ショップ状態に変更
+            self.engine.register_state_handler(GameState.SHOP, shop_handler)
+            self.engine.change_state(GameState.SHOP)
+            
+            logger.info("Successfully transitioned to shop")
+            
+        except Exception as e:
+            logger.error(f"Failed to transition to shop: {e}")
+            # エラー時は簡易ショップシミュレーション
+            self._simulate_shop()
+        
         self.transition_pending = False
+    
+    def _simulate_shop(self):
+        """ショップシミュレーション（フォールバック）"""
+        # 簡易ゴールド獲得
+        if not hasattr(self.engine.game_data, 'gold'):
+            self.engine.game_data.gold = 0
+        bonus_gold = random.randint(20, 50)
+        self.engine.game_data.gold += bonus_gold
+        logger.info(f"Shop simulation: gained {bonus_gold} gold")
     
     def _initialize_starting_position(self):
         """開始位置を初期化"""
@@ -331,6 +533,16 @@ class DungeonMapHandler:
         """ダンジョンマップを取得"""
         return self.dungeon_map
     
+    def _open_inventory(self):
+        """インベントリを開く"""
+        try:
+            from inventory.inventory_ui import InventoryUI
+            inventory_ui = InventoryUI(self.engine)
+            self.engine.register_state_handler(GameState.INVENTORY, inventory_ui)
+            self.engine.change_state(GameState.INVENTORY)
+        except Exception as e:
+            logger.error(f"Failed to open inventory: {e}")
+    
     def set_dungeon_map(self, dungeon_map: DungeonMap):
         """ダンジョンマップを設定"""
         self.dungeon_map = dungeon_map
@@ -345,7 +557,7 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
     
     pygame.init()
-    from ..core.game_engine import GameEngine
+    from core.game_engine import GameEngine
     
     logging.basicConfig(level=logging.INFO)
     

@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 from enum import Enum
 from dataclasses import dataclass
 
-from ..core.constants import *
+from core.constants import *
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,6 @@ class SpecialPuyoType(Enum):
     HEAL = "heal"              # 回復ぷよ：プレイヤーHP回復
     SHIELD = "shield"          # 盾ぷよ：ダメージ軽減
     POISON = "poison"          # 毒ぷよ：継続ダメージ
-    WILD = "wild"              # ワイルドぷよ：隣接する色に変化
     CHAIN_STARTER = "chain_starter"  # 連鎖開始ぷよ：必ず連鎖を開始
     
     # 新しい特殊ぷよ
@@ -117,11 +116,6 @@ class SpecialPuyo:
                 power=5,  # 毎秒5ダメージ
                 duration=10.0,
                 description="10秒間毎秒5ダメージの毒"
-            ),
-            SpecialPuyoType.WILD: SpecialEffect(
-                effect_type="color_adaptation",
-                power=0,
-                description="隣接するぷよの色に変化"
             ),
             SpecialPuyoType.CHAIN_STARTER: SpecialEffect(
                 effect_type="force_chain",
@@ -222,8 +216,6 @@ class SpecialPuyo:
         elif self.special_type == SpecialPuyoType.LIGHTNING:
             effect_result['affected_positions'] = self._get_lightning_range()
         
-        elif self.special_type == SpecialPuyoType.WILD and puyo_grid:
-            effect_result['new_color'] = self._determine_wild_color(puyo_grid)
         
         # 効果発動後は非アクティブに
         self.active = False
@@ -256,23 +248,6 @@ class SpecialPuyo:
         
         return positions
     
-    def _determine_wild_color(self, puyo_grid) -> PuyoType:
-        """ワイルドぷよの色を決定"""
-        # 隣接するぷよの色を調査
-        adjacent_colors = []
-        
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            nx, ny = self.x + dx, self.y + dy
-            if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
-                color = puyo_grid.get_puyo(nx, ny)
-                if color != PuyoType.EMPTY and color != PuyoType.GARBAGE:
-                    adjacent_colors.append(color)
-        
-        # 最も多い色を選択、なければランダム
-        if adjacent_colors:
-            return max(set(adjacent_colors), key=adjacent_colors.count)
-        else:
-            return random.choice([PuyoType.RED, PuyoType.BLUE, PuyoType.GREEN, PuyoType.YELLOW])
     
     def get_display_color(self) -> tuple:
         """表示色を取得"""
@@ -286,7 +261,6 @@ class SpecialPuyo:
             SpecialPuyoType.HEAL: Colors.GREEN,
             SpecialPuyoType.SHIELD: Colors.BLUE,
             SpecialPuyoType.POISON: Colors.DARK_GRAY,
-            SpecialPuyoType.WILD: Colors.LIGHT_GRAY,
             SpecialPuyoType.CHAIN_STARTER: Colors.RED,
             
             # 新しい特殊ぷよ
@@ -308,24 +282,23 @@ class SpecialPuyo:
         """アイコン文字を取得"""
         icons = {
             # 既存の特殊ぷよ
-            SpecialPuyoType.BOMB: "💣",
-            SpecialPuyoType.LIGHTNING: "⚡",
-            SpecialPuyoType.RAINBOW: "🌈",
+            SpecialPuyoType.BOMB: "B",
+            SpecialPuyoType.LIGHTNING: "L",
+            SpecialPuyoType.RAINBOW: "R",
             SpecialPuyoType.MULTIPLIER: "×",
-            SpecialPuyoType.FREEZE: "❄",
-            SpecialPuyoType.HEAL: "♥",
-            SpecialPuyoType.SHIELD: "🛡",
-            SpecialPuyoType.POISON: "☠",
-            SpecialPuyoType.WILD: "?",
-            SpecialPuyoType.CHAIN_STARTER: "⭐",
+            SpecialPuyoType.FREEZE: "F",
+            SpecialPuyoType.HEAL: "H",
+            SpecialPuyoType.SHIELD: "S",
+            SpecialPuyoType.POISON: "P",
+            SpecialPuyoType.CHAIN_STARTER: "C",
             
             # 新しい特殊ぷよ
-            SpecialPuyoType.BUFF: "💪",
-            SpecialPuyoType.TIMED_POISON: "⏰",
-            SpecialPuyoType.CHAIN_EXTEND: "➕",
-            SpecialPuyoType.ABSORB_SHIELD: "🔄",
-            SpecialPuyoType.CURSE: "👁",
-            SpecialPuyoType.REFLECT: "🪞",
+            SpecialPuyoType.BUFF: "U",
+            SpecialPuyoType.TIMED_POISON: "T",
+            SpecialPuyoType.CHAIN_EXTEND: "E",
+            SpecialPuyoType.ABSORB_SHIELD: "A",
+            SpecialPuyoType.CURSE: "K",
+            SpecialPuyoType.REFLECT: "M",
         }
         
         return icons.get(self.special_type, "S")
@@ -336,7 +309,7 @@ class SpecialPuyoManager:
     
     def __init__(self):
         self.special_puyos: Dict[Tuple[int, int], SpecialPuyo] = {}
-        self.spawn_chance = 0.05  # 5%の確率で特殊ぷよ生成
+        self.spawn_chance = 0.5  # 50%の確率で特殊ぷよ生成
         self.rarity_weights = {
             # 既存の特殊ぷよ（出現率調整）
             SpecialPuyoType.HEAL: 0.18,
@@ -344,7 +317,6 @@ class SpecialPuyoManager:
             SpecialPuyoType.LIGHTNING: 0.12,
             SpecialPuyoType.SHIELD: 0.10,
             SpecialPuyoType.FREEZE: 0.08,
-            SpecialPuyoType.WILD: 0.06,
             SpecialPuyoType.POISON: 0.04,
             SpecialPuyoType.MULTIPLIER: 0.025,
             SpecialPuyoType.RAINBOW: 0.012,
@@ -365,16 +337,28 @@ class SpecialPuyoManager:
         """特殊ぷよを生成するかどうか判定"""
         return random.random() < self.spawn_chance
     
-    def get_random_special_type(self) -> SpecialPuyoType:
-        """ランダムな特殊ぷよタイプを取得"""
+    def get_random_special_type(self, player=None) -> SpecialPuyoType:
+        """ランダムな特殊ぷよタイプを取得（プレイヤーが所持しているもののみ）"""
+        if player and hasattr(player, 'owned_special_puyos') and player.owned_special_puyos:
+            # プレイヤーが所持している特殊ぷよの中からランダム選択
+            owned_types = list(player.owned_special_puyos)
+            owned_weights = [self.rarity_weights.get(puyo_type, 0.1) for puyo_type in owned_types]
+            if sum(owned_weights) > 0:
+                return random.choices(owned_types, weights=owned_weights)[0]
+        
+        # フォールバック：従来通りの選択
         types = list(self.rarity_weights.keys())
         weights = list(self.rarity_weights.values())
         return random.choices(types, weights=weights)[0]
     
-    def add_special_puyo(self, x: int, y: int, special_type: Optional[SpecialPuyoType] = None):
+    def add_special_puyo(self, x: int, y: int, special_type: Optional[SpecialPuyoType] = None, player=None):
         """特殊ぷよを追加"""
         if special_type is None:
-            special_type = self.get_random_special_type()
+            special_type = self.get_random_special_type(player)
+        
+        # プレイヤーが所持していない特殊ぷよは出現させない
+        if player and not player.has_special_puyo(special_type):
+            return
         
         special_puyo = SpecialPuyo(special_type, x, y)
         self.special_puyos[(x, y)] = special_puyo
@@ -429,11 +413,11 @@ special_puyo_manager = SpecialPuyoManager()
 
 def increase_special_puyo_chance(multiplier: float):
     """特殊ぷよ出現率を増加"""
-    special_puyo_manager.spawn_chance = min(0.5, special_puyo_manager.spawn_chance * multiplier)
+    special_puyo_manager.spawn_chance = min(0.8, special_puyo_manager.spawn_chance * multiplier)
     logger.info(f"Special puyo spawn chance increased to {special_puyo_manager.spawn_chance:.2%}")
 
 
 def reset_special_puyo_chance():
     """特殊ぷよ出現率をリセット"""
-    special_puyo_manager.spawn_chance = 0.05
-    logger.info("Special puyo spawn chance reset to 5%")
+    special_puyo_manager.spawn_chance = 0.5
+    logger.info("Special puyo spawn chance reset to 50%")

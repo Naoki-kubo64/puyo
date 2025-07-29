@@ -12,8 +12,9 @@ from typing import List, Optional, Set, Tuple, Dict
 from dataclasses import dataclass
 from copy import deepcopy
 
-from ..core.constants import *
-from ..core.sound_manager import play_se, SoundType
+from core.constants import *
+from core.sound_manager import play_se, SoundType
+from special_puyo.special_puyo import special_puyo_manager
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,9 @@ class ChainResult:
 class PuyoGrid:
     """ぷよぷよグリッドの管理クラス"""
     
-    def __init__(self):
+    def __init__(self, engine=None):
         """グリッド初期化"""
+        self.engine = engine
         self.width = GRID_WIDTH
         self.height = GRID_HEIGHT
         
@@ -67,6 +69,9 @@ class PuyoGrid:
             [PuyoType.EMPTY for _ in range(self.height)]
             for _ in range(self.width)
         ]
+        
+        # 特殊ぷよ情報の辞書 (x, y) -> SimpleSpecialType
+        self.special_puyo_data: Dict[Tuple[int, int], any] = {}
         
         # 描画位置
         self.offset_x = GRID_OFFSET_X
@@ -91,6 +96,9 @@ class PuyoGrid:
         # アニメーション用連鎖統計
         self.animated_chain_level = 0
         self.animated_total_score = 0
+        
+        # 特殊ぷよ画像読み込み
+        self.special_puyo_images = self._load_special_puyo_images()
         self.animated_total_eliminated = 0
         
         logger.info(f"PuyoGrid initialized: {self.width}x{self.height}")
@@ -104,6 +112,7 @@ class PuyoGrid:
         self.total_chains = 0
         self.last_chain_score = 0
         self.last_chain_positions.clear()
+        self.special_puyo_data.clear()  # 特殊ぷよ情報もクリア
         logger.info("Grid cleared")
     
     def is_valid_position(self, x: int, y: int) -> bool:
@@ -122,6 +131,12 @@ class PuyoGrid:
             return False
         
         self.grid[x][y] = puyo_type
+        
+        # 通常のぷよが配置された時に特殊ぷよの出現をチェック（無効化）
+        # 特殊ぷよはPuyoPairの情報に基づいて直接設定されるため、ランダム生成は無し
+        # if puyo_type not in [PuyoType.EMPTY, PuyoType.GARBAGE]:
+        #     self._check_special_puyo_spawn(x, y)
+        
         return True
     
     def is_empty(self, x: int, y: int) -> bool:
@@ -251,6 +266,20 @@ class PuyoGrid:
         
         return chains
     
+    def detect_multi_color_elimination(self) -> bool:
+        """複数色の同時消去を検出（AOE攻撃用）"""
+        chains = self.find_all_chains()
+        
+        if len(chains) < 2:
+            return False
+        
+        # 異なる色の連鎖が同時に発生しているかチェック
+        colors = set()
+        for chain in chains:
+            colors.add(chain.chain_type)
+        
+        return len(colors) >= 2
+    
     def _calculate_chain_score(self, puyo_count: int, puyo_type: PuyoType) -> int:
         """連鎖スコアを計算（従来システム用）"""
         base_score = CHAIN_SCORE_BASE
@@ -307,6 +336,8 @@ class PuyoGrid:
         for pos in positions:
             puyo_type = self.get_puyo(pos.x, pos.y)
             if puyo_type != PuyoType.EMPTY:
+                # 特殊ぷよの効果を発動
+                self._trigger_special_puyo_effect(pos.x, pos.y)
                 # 弾けるエフェクト用のパーティクルを生成
                 particles = []
                 center_x = self.offset_x + pos.x * self.puyo_size + self.puyo_size // 2
@@ -338,6 +369,8 @@ class PuyoGrid:
                 
                 # グリッドからは即座に削除
                 self.set_puyo(pos.x, pos.y, PuyoType.EMPTY)
+                # 特殊ぷよデータも確実に削除（効果発動されなかった場合のため）
+                self.remove_special_puyo_data(pos.x, pos.y)
                 eliminated_count += 1
         
         # 消去SEを再生（1個以上消去された場合）
@@ -717,8 +750,70 @@ class PuyoGrid:
         # 連結エフェクトを描画
         self._render_connection_effects(surface)
         
+        # 新しいシンプル特殊ぷよシステムのアイコンを描画
+        self._render_simple_special_icons(surface)
+        
         # 枠線を描画
         self._render_border(surface)
+    
+    def set_special_puyo_data(self, x: int, y: int, special_type):
+        """特殊ぷよ情報を設定"""
+        if special_type:
+            self.special_puyo_data[(x, y)] = special_type
+            logger.debug(f"Set special puyo data: {special_type} at ({x}, {y})")
+    
+    def get_special_puyo_data(self, x: int, y: int):
+        """特殊ぷよ情報を取得"""
+        return self.special_puyo_data.get((x, y))
+    
+    def remove_special_puyo_data(self, x: int, y: int):
+        """特殊ぷよ情報を削除"""
+        if (x, y) in self.special_puyo_data:
+            removed = self.special_puyo_data.pop((x, y))
+            logger.debug(f"Removed special puyo data: {removed} at ({x}, {y})")
+    
+    def _render_simple_special_icons(self, surface: pygame.Surface):
+        """特殊ぷよアイコンを描画（PuyoGridの情報を使用）"""
+        try:
+            from core.simple_special_puyo import SimpleSpecialType
+            from special_puyo.special_puyo import SpecialPuyoType
+            
+            for (x, y), special_type in self.special_puyo_data.items():
+                if not special_type:
+                    continue
+                
+                # 特殊ぷよタイプをSpecialPuyoTypeに変換
+                if isinstance(special_type, SimpleSpecialType):
+                    if special_type == SimpleSpecialType.HEAL:
+                        old_type = SpecialPuyoType.HEAL
+                    elif special_type == SimpleSpecialType.BOMB:
+                        old_type = SpecialPuyoType.BOMB
+                    else:
+                        continue
+                else:
+                    continue
+                
+                # 既存の画像を取得
+                icon_image = self.special_puyo_images.get(old_type)
+                if not icon_image:
+                    continue
+                
+                # アイコンサイズを計算（ぷよサイズの70%）
+                icon_size = int(self.puyo_size * 0.7)
+                icon_offset = (self.puyo_size - icon_size) // 2
+                
+                # アイコンを中央に配置
+                puyo_x = self.offset_x + x * self.puyo_size
+                puyo_y = self.offset_y + y * self.puyo_size
+                icon_x = puyo_x + icon_offset
+                icon_y = puyo_y + icon_offset
+                
+                # アイコンを描画
+                scaled_icon = pygame.transform.scale(icon_image, (icon_size, icon_size))
+                surface.blit(scaled_icon, (icon_x, icon_y))
+                
+        except ImportError:
+            pass  # モジュールが利用できない場合は無視
     
     def _render_grid_background(self, surface: pygame.Surface):
         """グリッド背景を描画（透過）"""
@@ -736,6 +831,9 @@ class PuyoGrid:
                     continue
                 
                 self._draw_puyo_at(surface, x, y, puyo_type, 255, 1.0)
+                
+                # 特殊ぷよのアイコンを表示（古いシステム無効化）
+                # self._draw_special_puyo_icon(surface, x, y)
         
         # フェードアウト中のぷよを描画（弾けるエフェクト込み）
         for (x, y), data in self.disappearing_puyos.items():
@@ -948,6 +1046,341 @@ class PuyoGrid:
                     line += str(puyo.value)
             lines.append(line)
         return "\n".join(lines)
+    
+    def _check_special_puyo_spawn(self, x: int, y: int):
+        """特殊ぷよの出現をチェック"""
+        # プレイヤーが特殊ぷよを所持していない場合は出現させない
+        if not self.engine or not hasattr(self.engine, 'player'):
+            return
+        
+        player = self.engine.player
+        if not player.has_any_special_puyo():
+            return
+        
+        if special_puyo_manager.should_spawn_special_puyo():
+            # まだ特殊ぷよが配置されていない位置のみ
+            if not special_puyo_manager.get_special_puyo(x, y):
+                special_puyo_manager.add_special_puyo(x, y, player=player)
+                logger.info(f"Special puyo spawned at ({x}, {y})")
+    
+    def get_special_puyo_at(self, x: int, y: int):
+        """指定位置の特殊ぷよを取得"""
+        return special_puyo_manager.get_special_puyo(x, y)
+    
+    def has_special_puyo_at(self, x: int, y: int) -> bool:
+        """指定位置に特殊ぷよがあるかチェック"""
+        return special_puyo_manager.get_special_puyo(x, y) is not None
+    
+    def _load_special_puyo_images(self) -> Dict:
+        """特殊ぷよの画像を読み込み"""
+        images = {}
+        
+        # Picture フォルダから特殊ぷよ画像を読み込み
+        from special_puyo.special_puyo import SpecialPuyoType
+        
+        image_mapping = {
+            SpecialPuyoType.BOMB: "BOMB.png",
+            SpecialPuyoType.LIGHTNING: "LIGHTNING.png",
+            SpecialPuyoType.RAINBOW: "RAINBOW.png",
+            SpecialPuyoType.MULTIPLIER: "Multiplier.png",
+            SpecialPuyoType.FREEZE: "FREEZE.png",
+            SpecialPuyoType.HEAL: "HEAL.png",
+            SpecialPuyoType.SHIELD: "SHIELD.png",
+            SpecialPuyoType.POISON: "POISON.png",  
+            SpecialPuyoType.CHAIN_STARTER: "CHAIN_STARTER.png"
+        }
+        
+        for puyo_type, filename in image_mapping.items():
+            try:
+                image_path = f"Picture/{filename}"
+                image = pygame.image.load(image_path)
+                # ぷよサイズに合わせてスケール（少し小さめにして、ぷよの上に重ねる）
+                scaled_size = int(self.puyo_size * 0.7)
+                images[puyo_type] = pygame.transform.scale(image, (scaled_size, scaled_size))
+                logger.debug(f"Loaded special puyo image: {filename}")
+            except pygame.error as e:
+                logger.warning(f"Failed to load special puyo image {filename}: {e}")
+                # フォールバック：色つきの四角を作成
+                fallback_surface = pygame.Surface((int(self.puyo_size * 0.7), int(self.puyo_size * 0.7)))
+                fallback_surface.fill((255, 255, 255))
+                images[puyo_type] = fallback_surface
+        
+        return images
+    
+    def _draw_special_puyo_icon(self, surface: pygame.Surface, x: int, y: int):
+        """指定位置に特殊ぷよのアイコンを描画"""
+        special_puyo = self.get_special_puyo_at(x, y)
+        if not special_puyo:
+            return
+        
+        # 特殊ぷよ画像を取得
+        special_image = self.special_puyo_images.get(special_puyo.special_type)
+        if not special_image:
+            return
+        
+        # 通常のぷよの上に特殊ぷよアイコンを重ね描き
+        puyo_x = self.offset_x + x * self.puyo_size
+        puyo_y = self.offset_y + y * self.puyo_size
+        
+        # アイコンを中央に配置（ぷよサイズの70%なので、15%ずつオフセット）
+        icon_offset = int(self.puyo_size * 0.15)
+        icon_x = puyo_x + icon_offset
+        icon_y = puyo_y + icon_offset
+        
+        # 特殊ぷよのパルス効果を適用
+        if hasattr(special_puyo, 'pulse_intensity'):
+            # パルス効果で少し明るくする
+            alpha = int(200 + 55 * special_puyo.pulse_intensity)
+            special_image = special_image.copy()
+            special_image.set_alpha(alpha)
+        
+        surface.blit(special_image, (icon_x, icon_y))
+    
+    def _trigger_special_puyo_effect(self, x: int, y: int):
+        """特殊ぷよの効果を発動 - SimpleSpecialTypeシステム対応"""
+        # 新しいSimpleSpecialTypeシステム用の処理
+        special_type = self.get_special_puyo_data(x, y)
+        if not special_type:
+            # 古いシステムもチェック（後方互換性）
+            special_puyo = self.get_special_puyo_at(x, y)
+            if not special_puyo:
+                return
+            
+            # 古いシステムの効果実行
+            effect_result = special_puyo.trigger_effect(battle_context=None, puyo_grid=self)
+            if effect_result:
+                logger.info(f"Special puyo effect triggered at ({x}, {y}): {effect_result['description']}")
+                self._apply_special_effect(effect_result)
+            special_puyo_manager.remove_special_puyo(x, y)
+            return
+        
+        # 新しいSimpleSpecialTypeシステムの効果実行
+        from core.simple_special_puyo import SimpleSpecialType
+        logger.info(f"SimpleSpecial effect triggered at ({x}, {y}): {special_type}")
+        
+        if special_type == SimpleSpecialType.HEAL:
+            # HEAL効果: プレイヤーのHPを回復
+            self._apply_heal_effect(10)  # 10HP回復
+        elif special_type == SimpleSpecialType.BOMB:
+            # BOMB効果: 全体攻撃
+            self._apply_bomb_effect(x, y, 1)  # 全敵攻撃
+        elif special_type == SimpleSpecialType.LIGHTNING:
+            # LIGHTNING効果: 縦一列攻撃
+            self._apply_lightning_effect(x, y)
+        elif special_type == SimpleSpecialType.SHIELD:
+            # SHIELD効果: ダメージバリア
+            self._apply_shield_effect(15)  # 15ダメージ軽減
+        elif special_type == SimpleSpecialType.MULTIPLIER:
+            # MULTIPLIER効果: 連鎖ダメージ倍率アップ
+            self._apply_multiplier_effect(0.5)  # 50%ダメージアップ
+        elif special_type == SimpleSpecialType.POISON:
+            # POISON効果: 敵に継続ダメージ
+            self._apply_poison_effect(5, 3)  # 5ダメージ×3ターン
+        
+        # 効果発動後は特殊ぷよデータから削除
+        self.remove_special_puyo_data(x, y)
+    
+    def _apply_special_effect(self, effect_result: dict):
+        """特殊ぷよの効果を適用"""
+        effect_type = effect_result.get('type')
+        power = effect_result.get('power', 0)
+        position = effect_result.get('position', (0, 0))
+        
+        # 注意: 現在は基本的な効果のみ実装。バトルハンドラーとの連携が必要な効果は後で実装
+        if effect_type == "explosion":
+            # 爆発効果：周囲のぷよを削除
+            affected_positions = effect_result.get('affected_positions', [])
+            for ax, ay in affected_positions:
+                if self.is_valid_position(ax, ay):
+                    self.set_puyo(ax, ay, PuyoType.EMPTY)
+                    # 爆発で削除されたぷよに特殊ぷよがあった場合も削除
+                    special_puyo_manager.remove_special_puyo(ax, ay)
+            logger.info(f"Explosion effect applied: destroyed {len(affected_positions)} puyos")
+        
+        elif effect_type == "lightning_strike":
+            # 雷効果：縦一列を削除
+            affected_positions = effect_result.get('affected_positions', [])
+            for ax, ay in affected_positions:
+                if self.is_valid_position(ax, ay):
+                    self.set_puyo(ax, ay, PuyoType.EMPTY)
+                    special_puyo_manager.remove_special_puyo(ax, ay)
+            logger.info(f"Lightning effect applied: destroyed column with {len(affected_positions)} puyos")
+        
+        # その他の効果は後でバトルハンドラーとの連携で実装
+        else:
+            logger.info(f"Special effect {effect_type} requires battle context integration")
+    
+    def _apply_heal_effect(self, heal_amount: int):
+        """HEAL特殊ぷよの効果を適用"""
+        # まずエンジン経由でアクセスを試行
+        if hasattr(self, 'engine') and self.engine:
+            if hasattr(self.engine, 'player'):
+                player = self.engine.player
+                old_hp = player.hp
+                player.heal(heal_amount)
+                new_hp = player.hp
+                logger.info(f"HEAL effect: {old_hp} -> {new_hp} HP (+{new_hp - old_hp})")
+                return
+        
+        # バトルハンドラー経由でアクセスを試行
+        battle_handler = self._get_battle_handler()
+        if battle_handler:
+            player = battle_handler.engine.player
+            battle_player = battle_handler.battle_player
+            old_hp = player.hp
+            player.heal(heal_amount)
+            # バトルプレイヤーとも同期
+            battle_player.current_hp = player.hp
+            new_hp = player.hp
+            logger.info(f"HEAL effect via battle handler: {old_hp} -> {new_hp} HP (+{new_hp - old_hp})")
+            return
+        
+        logger.warning("HEAL effect: No player data available")
+    
+    def _apply_bomb_effect(self, center_x: int, center_y: int, radius: int = 1):
+        """BOMB特殊ぷよの効果を適用 - 全体攻撃バージョン"""
+        # バトルハンドラーを取得
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("BOMB effect: No battle handler available for damage calculation")
+            return
+        
+        # プレイヤーの連鎖数に基づいてダメージを計算
+        player = battle_handler.engine.player
+        chain_count = getattr(player, 'current_chain_count', 1)  # デフォルト1チェイン
+        
+        # プレイヤーの通常ダメージ計算を使用
+        base_damage = 40  # 1チェインの基本ダメージ
+        chain_multiplier = 1.0 + (chain_count - 1) * 0.5  # チェイン倍率
+        damage = int(base_damage * chain_multiplier * player.chain_damage_multiplier)
+        
+        # 全ての敵にダメージを与える
+        enemies_hit = 0
+        if hasattr(battle_handler, 'enemy_group') and battle_handler.enemy_group:
+            for enemy in battle_handler.enemy_group.enemies:
+                # is_alive は プロパティかメソッドかを確認
+                if hasattr(enemy, 'is_alive'):
+                    alive = enemy.is_alive() if callable(enemy.is_alive) else enemy.is_alive
+                else:
+                    alive = enemy.current_hp > 0
+                
+                if alive:
+                    old_hp = enemy.current_hp
+                    enemy.take_damage(damage)
+                    new_hp = enemy.current_hp
+                    logger.info(f"BOMB effect: {enemy.get_display_name()} took {damage} damage ({old_hp} -> {new_hp})")
+                    enemies_hit += 1
+        
+        logger.info(f"BOMB effect: Hit {enemies_hit} enemies for {damage} damage each (chain x{chain_count})")
+    
+    def _apply_lightning_effect(self, center_x: int, center_y: int):
+        """LIGHTNING特殊ぷよの効果を適用 - 縦一列攻撃"""
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("LIGHTNING effect: No battle handler available")
+            return
+        
+        # より強力な単体攻撃
+        player = battle_handler.engine.player
+        chain_count = getattr(player, 'current_chain_count', 1)
+        base_damage = 80  # 爆弾より強い単体ダメージ
+        chain_multiplier = 1.0 + (chain_count - 1) * 0.5
+        damage = int(base_damage * chain_multiplier * player.chain_damage_multiplier)
+        
+        # 最もHPの高い敵1体に攻撃
+        target_enemy = None
+        max_hp = 0
+        if hasattr(battle_handler, 'enemy_group') and battle_handler.enemy_group:
+            for enemy in battle_handler.enemy_group.enemies:
+                alive = enemy.is_alive() if callable(enemy.is_alive) else enemy.is_alive
+                if alive and enemy.current_hp > max_hp:
+                    max_hp = enemy.current_hp
+                    target_enemy = enemy
+        
+        if target_enemy:
+            old_hp = target_enemy.current_hp
+            target_enemy.take_damage(damage)
+            new_hp = target_enemy.current_hp
+            logger.info(f"LIGHTNING effect: {target_enemy.get_display_name()} took {damage} damage ({old_hp} -> {new_hp})")
+        
+        logger.info(f"LIGHTNING effect: Single target {damage} damage (chain x{chain_count})")
+    
+    def _apply_shield_effect(self, shield_amount: int):
+        """SHIELD特殊ぷよの効果を適用"""
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("SHIELD effect: No battle handler available")
+            return
+        
+        # バトルプレイヤーにシールドを追加
+        battle_player = battle_handler.battle_player
+        if hasattr(battle_player, 'shields'):
+            # 既存のシールドに追加
+            if 'basic' in battle_player.shields:
+                battle_player.shields['basic'][0] += shield_amount
+            else:
+                battle_player.shields['basic'] = [shield_amount, 999.0]  # 長時間持続
+            
+            logger.info(f"SHIELD effect: Added {shield_amount} shield points")
+        else:
+            logger.warning("SHIELD effect: Battle player has no shield system")
+    
+    def _apply_multiplier_effect(self, multiplier_bonus: float):
+        """MULTIPLIER特殊ぷよの効果を適用"""
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("MULTIPLIER effect: No battle handler available")
+            return
+        
+        # プレイヤーの攻撃倍率を一時的に上昇
+        player = battle_handler.engine.player
+        old_multiplier = player.chain_damage_multiplier
+        player.chain_damage_multiplier += multiplier_bonus
+        new_multiplier = player.chain_damage_multiplier
+        
+        logger.info(f"MULTIPLIER effect: Damage multiplier {old_multiplier:.1f} -> {new_multiplier:.1f}")
+    
+    def _apply_poison_effect(self, poison_damage: int, duration: int):
+        """POISON特殊ぷよの効果を適用"""
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("POISON effect: No battle handler available")
+            return
+        
+        # 全ての敵に毒効果を付与
+        enemies_poisoned = 0
+        if hasattr(battle_handler, 'enemy_group') and battle_handler.enemy_group:
+            for enemy in battle_handler.enemy_group.enemies:
+                alive = enemy.is_alive() if callable(enemy.is_alive) else enemy.is_alive
+                if alive:
+                    # 敵に毒デバフを追加（簡易実装）
+                    if hasattr(enemy, 'debuffs'):
+                        if 'poison' in enemy.debuffs:
+                            enemy.debuffs['poison'][0] += poison_damage
+                            enemy.debuffs['poison'][1] = max(enemy.debuffs['poison'][1], duration)
+                        else:
+                            enemy.debuffs['poison'] = [poison_damage, duration]
+                    enemies_poisoned += 1
+        
+        logger.info(f"POISON effect: Applied {poison_damage}x{duration} poison to {enemies_poisoned} enemies")
+    
+    def _get_battle_handler(self):
+        """バトルハンドラーを取得"""
+        # 直接参照があればそれを使用
+        if hasattr(self, 'battle_handler') and self.battle_handler:
+            return self.battle_handler
+        
+        # エンジン経由でバトルハンドラーを取得
+        if hasattr(self, 'engine') and self.engine:
+            current_state = getattr(self.engine, 'current_state', None)
+            if current_state:
+                from core.constants import GameState
+                if current_state == GameState.REAL_BATTLE:
+                    battle_handler = self.engine.state_handlers.get(GameState.REAL_BATTLE)
+                    if battle_handler:
+                        return battle_handler
+        
+        return None
 
 
 if __name__ == "__main__":

@@ -7,16 +7,16 @@ import logging
 import math
 from typing import Optional, List
 
-from ..core.constants import *
-from ..core.game_engine import GameEngine, get_appropriate_font
-from ..core.authentic_demo_handler import AuthenticDemoHandler
-from ..core.background_renderer import BackgroundRenderer
-from ..core.top_ui_bar import TopUIBar
+from core.constants import *
+from core.game_engine import GameEngine, get_appropriate_font
+from core.authentic_demo_handler import AuthenticDemoHandler
+from core.background_renderer import BackgroundRenderer
+from core.top_ui_bar import TopUIBar
 from .enemy import Enemy, EnemyAction, EnemyGroup, create_enemy_group, ActionType
 from .enemy_renderer import EnemyRenderer
 from .enemy_intent_renderer import EnemyIntentRenderer
-from ..special_puyo.special_puyo import special_puyo_manager
-from ..rewards.reward_system import RewardGenerator, RewardSelectionHandler
+from special_puyo.special_puyo import special_puyo_manager
+from rewards.reward_system import RewardGenerator, RewardSelectionHandler
 
 logger = logging.getLogger(__name__)
 
@@ -202,27 +202,41 @@ class BattleHandler:
         else:
             logger.warning("Battle handler initialized without current_node!")
         
-        # プレイヤー
-        self.player = Player()
+        # プレイヤー (統合されたプレイヤーデータを使用)
+        self.player = self.engine.player  # ゲームエンジンの統合プレイヤーデータを使用
+        self.battle_player = Player()  # 戦闘固有の機能用（バフ・デバフなど）
+        
+        # 戦闘開始時に battle_player の HP を PlayerData と同期
+        self.battle_player.max_hp = self.player.max_hp
+        self.battle_player.current_hp = self.player.hp
+        self.battle_player.is_alive = self.player.hp > 0
         
         # 敵グループ
         enemies = create_enemy_group(floor_level)
         self.enemy_group = EnemyGroup(enemies)
         
         # ぷよぷよシステム（AuthenticDemoHandlerをベースに使用）
-        self.puyo_handler = AuthenticDemoHandler(engine)
+        self.puyo_handler = AuthenticDemoHandler(engine, parent_battle_handler=self)
         
         # 戦闘状態
         self.battle_active = True
         self.battle_result = None  # None, "victory", "defeat"
         
-        # ダメージ計算
-        self.chain_damage_multiplier = 1.0
+        # デバッグコマンド用
+        self.debug_input = ""
+        self.debug_mode = True  # デバッグモードを有効にする
+        
+        # ダメージ計算はPlayerData.chain_damage_multiplierを使用
         
         # 報酬システム
         self.reward_generator = RewardGenerator()
         self.reward_handler = None
         self.victory_rewards_generated = False
+        
+        # バトル開始カウントダウンシステム
+        self.countdown_active = True
+        self.countdown_timer = 3.0  # 3秒間のカウントダウン
+        self.countdown_start_time = 3.0
         
         # UI位置 - 敵情報をぷよエリアの右下に配置
         # ぷよエリアの右側、ぷよエリアの下端に合わせる
@@ -243,6 +257,33 @@ class BattleHandler:
         enemy_names = [e.get_display_name() for e in self.enemy_group.enemies]
         logger.info(f"Battle started: Floor {floor_level} vs {', '.join(enemy_names)}")
     
+    def _sync_player_hp(self):
+        """PlayerDataとbattle_playerのHPを同期"""
+        self.player.hp = self.battle_player.current_hp
+        self.battle_player.max_hp = self.player.max_hp
+        
+        # 死亡状態を確認
+        if self.player.hp <= 0:
+            self.battle_player.is_alive = False
+            self.player.hp = 0
+        else:
+            self.battle_player.is_alive = True
+    
+    def _finalize_battle_stats(self):
+        """battle_playerの統計をPlayerData.statsに反映"""
+        # 戦闘終了時にHPを同期
+        self._sync_player_hp()
+        
+        # 戦闘結果をPlayerDataに記録
+        won = (self.battle_result == "victory")
+        self.player.update_combat_stats(
+            damage_dealt=0,  # すでに連鎖ごとに加算済み
+            chains_made=0,   # すでに連鎖ごとに加算済み  
+            won=won
+        )
+        
+        logger.info(f"Battle finalized: {self.battle_result}, HP: {self.player.hp}/{self.player.max_hp}")
+    
     def on_enter(self, previous_state):
         """戦闘開始"""
         self.puyo_handler.on_enter(previous_state)
@@ -258,8 +299,23 @@ class BattleHandler:
         if not self.battle_active:
             return
         
-        # プレイヤー更新
-        self.player.update(dt)
+        # カウントダウン処理
+        if self.countdown_active:
+            self.countdown_timer -= dt
+            if self.countdown_timer <= 0:
+                self.countdown_active = False
+                logger.info("Battle countdown finished - combat started!")
+            else:
+                # カウントダウン中は制限された更新のみ
+                self.background_renderer.update(dt)
+                self.top_ui_bar.update(dt)
+                # NEXTぷよなどの読み込みは継続
+                if hasattr(self.puyo_handler, '_generate_initial_next_queue'):
+                    pass  # NEXTキューの準備は継続
+                return
+        
+        # プレイヤー更新（戦闘固有の機能のみ）
+        self.battle_player.update(dt)
         
         # ぷよぷよシステム更新
         self.puyo_handler.update(dt)
@@ -272,8 +328,8 @@ class BattleHandler:
         # 連鎖によるダメージ処理
         self._check_chain_damage()
         
-        # 敵グループの更新と攻撃
-        enemy_actions = self.enemy_group.update(dt, self.player.current_hp)
+        # 敵グループの更新と攻撃（カウントダウン終了後のみ）
+        enemy_actions = self.enemy_group.update(dt, self.player.hp)
         for enemy, action in enemy_actions:
             self._execute_enemy_action(enemy, action)
         
@@ -304,8 +360,9 @@ class BattleHandler:
             # スコアをダメージに変換
             base_damage = max(1, last_score // CHAIN_SCORE_BASE)  # 最低1ダメージ保証
             
-            # プレイヤーの攻撃力修正を適用
-            modified_damage = int(base_damage * self.player.attack_multiplier * self.chain_damage_multiplier)
+            # プレイヤーの攻撃力修正を適用（PlayerData + battle_playerのバフを組み合わせ）
+            total_attack_multiplier = self.battle_player.attack_multiplier * self.player.chain_damage_multiplier
+            modified_damage = int(base_damage * total_attack_multiplier)
             
             # 特殊ぷよによる連鎖の処理
             chain_positions = self.puyo_handler.puyo_grid.get_last_chain_positions()
@@ -334,8 +391,10 @@ class BattleHandler:
             target = self.enemy_group.get_selected_target()
             if target:
                 defeated = target.take_damage(modified_damage)
-                self.player.total_damage_dealt += modified_damage
-                self.player.total_chains_made += 1
+                # 統計情報の安全な更新
+                if hasattr(self.player, 'stats') and self.player.stats:
+                    self.player.stats.total_damage_dealt += modified_damage
+                    self.player.stats.total_chains_made += 1
                 
                 # ダメージ数値表示
                 target_pos = self._get_enemy_display_position(target)
@@ -345,8 +404,7 @@ class BattleHandler:
                 
                 # 全敵が倒されたかチェック
                 if self.enemy_group.is_all_defeated():
-                    self.battle_result = "victory"
-                    self.battle_active = False
+                    self._handle_victory()
                     logger.info("All enemies defeated - Victory!")
             else:
                 logger.warning("No target selected for chain damage!")
@@ -373,7 +431,14 @@ class BattleHandler:
                 final_damage = int(final_damage * (1 - reduction))
                 logger.info(f"Enemy attack reduced by curse: {action.damage} -> {final_damage}")
             
-            defeated, reflected_damage = self.player.take_damage(final_damage)
+            defeated, reflected_damage = self.battle_player.take_damage(final_damage)
+            
+            # HPを同期
+            self._sync_player_hp()
+            
+            # 死亡状態を確認
+            if self.player.hp <= 0:
+                defeated = True
             
             # 反射ダメージを敵に与える
             if reflected_damage > 0:
@@ -382,8 +447,7 @@ class BattleHandler:
                 logger.info(f"Reflected {reflected_damage} damage to {enemy.get_display_name()}")
                 
                 if enemy_defeated and self.enemy_group.is_all_defeated():
-                    self.battle_result = "victory"
-                    self.battle_active = False
+                    self._handle_victory()
             
             # ダメージ数値表示
             self._add_damage_number(final_damage, Colors.RED, target_player=True)
@@ -419,23 +483,24 @@ class BattleHandler:
         
         if effect_type == 'attack_buff':
             # バフぷよ：攻撃力上昇
-            self.player.apply_buff('attack_buff', power, duration)
+            self.battle_player.apply_buff('attack_buff', power, duration)
             
         elif effect_type == 'heal_player':
-            # 回復ぷよ：HP回復
-            self.player.heal(power)
+            # 回復ぷよ：HP回復（PlayerDataとbattle_player両方を更新）
+            healed = self.player.heal(power)
+            self._sync_player_hp()
             
         elif effect_type == 'damage_reduction':
             # シールドぷよ：ダメージ軽減シールド
-            self.player.apply_shield('damage_reduction', power, duration)
+            self.battle_player.apply_shield('damage_reduction', power, duration)
             
         elif effect_type == 'absorb_barrier':
             # 吸収シールドぷよ：ダメージを吸収してHP変換
-            self.player.apply_shield('absorb', power, duration)
+            self.battle_player.apply_shield('absorb', power, duration)
             
         elif effect_type == 'damage_reflect':
             # 反射ぷよ：ダメージ反射
-            self.player.apply_reflect(power, duration)
+            self.battle_player.apply_reflect(power, duration)
             
         elif effect_type == 'freeze_enemy':
             # 氷ぷよ：敵の行動遅延
@@ -508,7 +573,7 @@ class BattleHandler:
     def _return_to_dungeon_map(self):
         """ダンジョンマップに戻る"""
         try:
-            from ..dungeon.map_handler import DungeonMapHandler
+            from dungeon.map_handler import DungeonMapHandler
             
             # 戦闘勝利時：マップの進行状態を更新
             if self.battle_result == "victory" and hasattr(self.engine, 'persistent_dungeon_map') and self.engine.persistent_dungeon_map:
@@ -602,17 +667,20 @@ class BattleHandler:
         if not self.battle_active:
             return
         
-        if not self.player.is_alive:
+        if self.player.hp <= 0 or not self.battle_player.is_alive:
             self.battle_result = "defeat"
             self.battle_active = False
+            self._finalize_battle_stats()
         elif self.enemy_group.is_all_defeated():
-            self.battle_result = "victory"
-            self.battle_active = False
-            # 勝利時の報酬を生成
-            self._generate_victory_rewards()
+            self._handle_victory()
+            self._finalize_battle_stats()
     
     def handle_event(self, event: pygame.event.Event):
         """イベント処理"""
+        # マウス移動イベント処理（TopUIBarのホバー効果用）
+        if event.type == pygame.MOUSEMOTION:
+            self.top_ui_bar.handle_mouse_motion(event.pos)
+        
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1 and self.battle_active:  # 左クリック
                 # 敵選択
@@ -629,6 +697,14 @@ class BattleHandler:
                     # 戦闘から逃げる（敗北扱い）
                     self.battle_result = "defeat"
                     self.battle_active = False
+                return
+            
+            elif event.key == pygame.K_k and self.battle_active:
+                # デバッグ用：Kキーで敵を即座に倒す
+                logger.info("Debug: Kill command activated - defeating all enemies")
+                for enemy in self.enemy_group.enemies:
+                    enemy.current_hp = 0
+                self._check_battle_end()
                 return
             
             elif event.key == pygame.K_RETURN and not self.battle_active:
@@ -661,10 +737,73 @@ class BattleHandler:
                 if target:
                     logger.info(f"Target switched to: {target.get_display_name()}")
                 return
+            
+            # デバッグコマンド入力処理
+            elif self.debug_mode and self.battle_active:
+                if event.key == pygame.K_BACKSPACE:
+                    # バックスペースで文字削除
+                    self.debug_input = self.debug_input[:-1]
+                    return  # デバッグ入力処理後は他の処理をスキップ
+                elif event.key == pygame.K_RETURN:
+                    # エンターでコマンド実行
+                    self._execute_debug_command(self.debug_input.lower())
+                    self.debug_input = ""
+                    return  # デバッグコマンド実行後は他の処理をスキップ
+                elif event.unicode.isprintable() and len(self.debug_input) < 10:
+                    # 文字入力
+                    self.debug_input += event.unicode
+                    return  # デバッグ入力中は他の処理をスキップ
         
         # ぷよぷよの操作は戦闘中のみ
         if self.battle_active:
             self.puyo_handler.handle_event(event)
+    
+    def _execute_debug_command(self, command: str):
+        """デバッグコマンドを実行"""
+        if command == "kill":
+            # 全ての敵を一撃で倒す
+            for enemy in self.enemy_group.enemies:
+                if enemy.is_alive:
+                    enemy.current_hp = 0
+                    enemy.is_alive = False
+                    logger.info(f"Debug: Killed {enemy.get_display_name()}")
+            
+            # 戦闘終了チェック
+            if self.enemy_group.is_all_defeated():
+                self._handle_victory()
+                logger.info("Debug: All enemies killed - Victory!")
+        
+        elif command == "heal":
+            # プレイヤーのHPを全回復
+            self.battle_player.current_hp = self.battle_player.max_hp
+            self.player.hp = self.player.max_hp
+            logger.info("Debug: Player fully healed")
+        
+        elif command == "damage":
+            # 敵に1000ダメージ
+            target = self.enemy_group.get_selected_target()
+            if target and target.is_alive:
+                damage = min(1000, target.current_hp)
+                target.take_damage(damage)
+                logger.info(f"Debug: Dealt {damage} damage to {target.get_display_name()}")
+                
+                if target.current_hp <= 0:
+                    target.is_alive = False
+                    if self.enemy_group.is_all_defeated():
+                        self._handle_victory()
+        
+        else:
+            logger.info(f"Debug: Unknown command '{command}'. Available: kill, heal, damage")
+    
+    def _handle_victory(self):
+        """勝利処理"""
+        self.battle_result = "victory"
+        self.battle_active = False
+        
+        # 報酬を生成
+        self._generate_victory_rewards()
+        
+        logger.info("Victory achieved!")
     
     def render(self, surface: pygame.Surface):
         """描画処理"""
@@ -674,24 +813,27 @@ class BattleHandler:
         
         # 上部UIバーを描画
         # プレイヤーのダメージを受けた時のフラッシュ効果
-        if self.player.damage_flash_timer > 0:
+        if self.battle_player.damage_flash_timer > 0:
             self.top_ui_bar.trigger_damage_flash()
         
         logger.debug("Drawing top UI bar...")
+        # 特殊ぷよの出現率データを取得
+        special_puyo_rates = self.player.special_puyo_rates if hasattr(self.player, 'special_puyo_rates') else {}
+        
         self.top_ui_bar.draw_top_bar(
             surface,
-            self.player.current_hp, self.player.max_hp,
-            3, 3,  # エネルギー（固定値）
-            150,   # ゴールド（固定値）
-            self.floor_level
+            self.player.hp, self.player.max_hp,
+            self.player.gold,   # ゴールド
+            self.floor_level,
+            special_puyo_rates  # 特殊ぷよ出現率
         )
         
         # ぷよぷよフィールド描画（背景の上に）
         self.puyo_handler.render(surface)
         
         # プレイヤーダメージフラッシュ
-        if self.player.damage_flash_timer > 0:
-            flash_alpha = int(128 * (self.player.damage_flash_timer / self.player.damage_flash_duration))
+        if self.battle_player.damage_flash_timer > 0:
+            flash_alpha = int(128 * (self.battle_player.damage_flash_timer / self.battle_player.damage_flash_duration))
             flash_surface = pygame.Surface((GRID_WIDTH * PUYO_SIZE, GRID_HEIGHT * PUYO_SIZE))
             flash_surface.set_alpha(flash_alpha)
             flash_surface.fill(Colors.RED)
@@ -702,6 +844,13 @@ class BattleHandler:
         
         # ダメージ数値描画
         self._render_damage_numbers(surface)
+        
+        # AOE攻撃インジケーターを表示
+        self._render_aoe_indicator(surface)
+        
+        # カウントダウンオーバーレイ（最前面に描画）
+        if self.countdown_active:
+            self._render_countdown_overlay(surface)
         
         # 戦闘結果画面
         if not self.battle_active:
@@ -826,8 +975,11 @@ class BattleHandler:
         pygame.draw.rect(surface, (80, 70, 60), stats_bg, 2)
         
         # 統計データ
+        player_stats = getattr(self.player, 'stats', None)
+        total_damage = player_stats.total_damage_dealt if player_stats else 0
+        
         stats = [
-            f"与えたダメージ: {self.player.total_damage_dealt}",
+            f"与えたダメージ: {total_damage}",
             f"連鎖数: {self.puyo_handler.total_chains}",
             f"現在スコア: {self.puyo_handler.total_score}",
         ]
@@ -844,13 +996,13 @@ class BattleHandler:
         font_small = self.engine.fonts['small']
         
         # プレイヤーHP表示
-        player_hp_text = font_medium.render(f"Player HP: {self.player.current_hp}/{self.player.max_hp}", True, Colors.WHITE)
+        player_hp_text = font_medium.render(f"Player HP: {self.player.hp}/{self.player.max_hp}", True, Colors.WHITE)
         surface.blit(player_hp_text, (GRID_OFFSET_X, GRID_OFFSET_Y - 40))
         
         # プレイヤーHPバー
         hp_bar_width = 200
         hp_bar_height = 20
-        hp_ratio = self.player.current_hp / self.player.max_hp
+        hp_ratio = self.player.hp / self.player.max_hp
         
         # HPバー背景
         hp_bg_rect = pygame.Rect(GRID_OFFSET_X, GRID_OFFSET_Y - 20, hp_bar_width, hp_bar_height)
@@ -862,8 +1014,8 @@ class BattleHandler:
         pygame.draw.rect(surface, hp_color, hp_fg_rect)
         
         # プレイヤーダメージフラッシュ
-        if self.player.damage_flash_timer > 0:
-            flash_alpha = int(128 * (self.player.damage_flash_timer / self.player.damage_flash_duration))
+        if self.battle_player.damage_flash_timer > 0:
+            flash_alpha = int(128 * (self.battle_player.damage_flash_timer / self.battle_player.damage_flash_duration))
             flash_surface = pygame.Surface((GRID_WIDTH * PUYO_SIZE, GRID_HEIGHT * PUYO_SIZE))
             flash_surface.set_alpha(flash_alpha)
             flash_surface.fill(Colors.RED)
@@ -877,8 +1029,12 @@ class BattleHandler:
         enemy_area_height = enemy_count * (160 + 10)  # enemy_height + spacing
         stats_y = self.battle_ui_y + enemy_area_height + 20
         
+        # 統計データの安全な取得
+        player_stats = getattr(self.player, 'stats', None)
+        total_damage = player_stats.total_damage_dealt if player_stats else 0
+        
         stats = [
-            f"与えたダメージ: {self.player.total_damage_dealt}",
+            f"与えたダメージ: {total_damage}",
             f"連鎖数: {self.puyo_handler.total_chains}",
             f"現在スコア: {self.puyo_handler.total_score}",
         ]
@@ -1082,6 +1238,30 @@ class BattleHandler:
             
             surface.blit(damage_surface, (number['x'], number['y']))
     
+    def _render_aoe_indicator(self, surface: pygame.Surface):
+        """AOE攻撃インジケーターを描画"""
+        # 複数色の同時消去をチェック
+        if hasattr(self.puyo_handler.puyo_grid, 'detect_multi_color_elimination'):
+            is_aoe = self.puyo_handler.puyo_grid.detect_multi_color_elimination()
+        else:
+            return
+        
+        if is_aoe:
+            # AOE攻撃可能状態を表示
+            font_medium = self.engine.fonts['medium']
+            aoe_text = font_medium.render("AOE READY!", True, Colors.ORANGE)
+            
+            # 画面右上に表示
+            text_rect = aoe_text.get_rect()
+            text_rect.topright = (SCREEN_WIDTH - 20, 100)
+            
+            # 背景
+            bg_rect = text_rect.inflate(20, 10)
+            pygame.draw.rect(surface, Colors.DARK_GRAY, bg_rect, border_radius=5)
+            pygame.draw.rect(surface, Colors.ORANGE, bg_rect, 3, border_radius=5)
+            
+            surface.blit(aoe_text, text_rect)
+    
     def _render_battle_result(self, surface: pygame.Surface):
         """戦闘結果画面を描画"""
         # 半透明オーバーレイ
@@ -1119,8 +1299,11 @@ class BattleHandler:
         surface.blit(subtitle_text, subtitle_rect)
         
         # 統計表示
+        player_stats = getattr(self.player, 'stats', None)
+        total_damage = player_stats.total_damage_dealt if player_stats else 0
+        
         stats = [
-            f"与えたダメージ: {self.player.total_damage_dealt}",
+            f"与えたダメージ: {total_damage}",
             f"作った連鎖: {self.puyo_handler.total_chains}",
             f"最終スコア: {self.puyo_handler.total_score}",
         ]
@@ -1164,7 +1347,8 @@ class BattleHandler:
             "ぷよぷよ: A/D-移動 S-高速落下 Space-回転",
             "ターゲット: TAB-次の敵 Q-前の敵 クリック-選択",
             "敵情報: 黄色アイコン=次回行動予告 オレンジバー=行動タイマー",
-            "ESC-逃げる"
+            "ESC-逃げる",
+            "デバッグ: killコマンドで敵を一撃で倒す"
         ]
         
         for i, instruction in enumerate(battle_instructions):
@@ -1172,3 +1356,66 @@ class BattleHandler:
             inst_text = inst_font.render(instruction, True, Colors.LIGHT_GRAY)
             inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80 + i * 20))
             surface.blit(inst_text, inst_rect)
+        
+        # デバッグ入力表示
+        if self.debug_mode and self.debug_input:
+            debug_font = get_appropriate_font(self.engine.fonts, f"Debug: {self.debug_input}", 'small')
+            debug_text = debug_font.render(f"Debug: {self.debug_input}", True, Colors.YELLOW)
+            debug_rect = debug_text.get_rect(bottomleft=(10, SCREEN_HEIGHT - 10))
+            surface.blit(debug_text, debug_rect)
+    
+    def _render_countdown_overlay(self, surface: pygame.Surface):
+        """バトル開始カウントダウンオーバーレイを描画"""
+        # 半透明の背景オーバーレイ
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(150)
+        overlay.fill(Colors.BLACK)
+        surface.blit(overlay, (0, 0))
+        
+        # カウントダウン表示の計算
+        remaining_time = self.countdown_timer
+        
+        if remaining_time > 2.0:
+            # 3秒台: "3"
+            countdown_text = "3"
+            color = Colors.RED
+        elif remaining_time > 1.0:
+            # 2秒台: "2"
+            countdown_text = "2"
+            color = Colors.YELLOW
+        elif remaining_time > 0.0:
+            # 1秒台: "1"
+            countdown_text = "1"
+            color = Colors.GREEN
+        else:
+            # 0秒: "START"
+            countdown_text = "START"
+            color = Colors.WHITE
+        
+        # 大きなフォントでカウントダウンを描画
+        font_size = 120 if countdown_text != "START" else 80
+        
+        # フォントを取得（大きなサイズ用）
+        try:
+            countdown_font = pygame.font.Font(None, font_size)
+        except:
+            countdown_font = self.engine.fonts['large']
+        
+        # テキストを描画
+        text_surface = countdown_font.render(countdown_text, True, color)
+        text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        
+        # 影効果
+        shadow_surface = countdown_font.render(countdown_text, True, Colors.BLACK)
+        shadow_rect = shadow_surface.get_rect(center=(SCREEN_WIDTH // 2 + 3, SCREEN_HEIGHT // 2 + 3))
+        surface.blit(shadow_surface, shadow_rect)
+        
+        # メインテキスト
+        surface.blit(text_surface, text_rect)
+        
+        # "BATTLE START" サブテキスト
+        if countdown_text == "START":
+            sub_font = self.engine.fonts['medium']
+            sub_text = sub_font.render("BATTLE START", True, Colors.LIGHT_GRAY)
+            sub_rect = sub_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60))
+            surface.blit(sub_text, sub_rect)

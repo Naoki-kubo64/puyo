@@ -10,8 +10,9 @@ from typing import Dict, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
-from .constants import *
-from .sound_manager import get_sound_manager
+from core.constants import *
+from core.sound_manager import get_sound_manager
+from core.player_data import PlayerData
 
 # ログ設定
 logging.basicConfig(level=LOG_LEVEL)
@@ -86,6 +87,13 @@ class GameEngine:
         # ゲームデータ
         self.game_data = GameData()
         
+        # プレイヤーデータ
+        self.player = PlayerData()
+        
+        # ゲーム終了条件管理
+        from game_completion.game_conditions import GameConditionManager
+        self.condition_manager = GameConditionManager(self)
+        
         # 状態管理システム
         self.state_handlers = {}
         self.state_systems = {}
@@ -130,7 +138,7 @@ class GameEngine:
                             test_font = pygame.font.Font(font_path, FONT_SIZE_MEDIUM)
                             # 日本語と絵文字テスト
                             test_japanese = test_font.render("ゴブリン", True, (255, 255, 255))
-                            test_emoji = test_font.render("⚔️", True, (255, 255, 255))
+                            test_emoji = test_font.render("A", True, (255, 255, 255))
                             if ((test_japanese and test_japanese.get_width() > 0) or 
                                 (test_emoji and test_emoji.get_width() > 0)):
                                 japanese_font = test_font
@@ -290,6 +298,10 @@ class GameEngine:
         """ゲーム状態更新"""
         if self.paused:
             return
+        
+        # ゲーム終了条件チェック（ゲーム中のみ）
+        if self.current_state in [GameState.DUNGEON_MAP, GameState.BATTLE, GameState.REAL_BATTLE]:
+            self.condition_manager.check_game_conditions()
         
         # 現在の状態のシステムを更新
         if self.current_state in self.state_systems:

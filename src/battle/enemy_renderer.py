@@ -7,7 +7,7 @@ import pygame
 import math
 from typing import Tuple
 from .enemy import EnemyType
-from ..core.constants import Colors
+from core.constants import Colors
 
 class EnemyRenderer:
     """敵の描画を担当するクラス"""
@@ -185,37 +185,37 @@ class EnemyRenderer:
             # 頭（大きい緑の円）
             head_color = (60, 120, 60) if hp_ratio > 0.3 else (120, 80, 60)
             pygame.draw.circle(surface, head_color, (center_x, center_y - 15), 25)
-        
-        # 体（大きい長方形）
-        body_color = (80, 80, 40) if hp_ratio > 0.3 else (120, 80, 40)
-        pygame.draw.rect(surface, body_color, 
-                        pygame.Rect(center_x - 20, center_y + 5, 40, 50))
-        
-        # 牙
-        tusk_color = Colors.WHITE
-        pygame.draw.polygon(surface, tusk_color, [
-            (center_x - 8, center_y - 5),
-            (center_x - 12, center_y + 5),
-            (center_x - 5, center_y + 2)
-        ])
-        pygame.draw.polygon(surface, tusk_color, [
-            (center_x + 8, center_y - 5),
-            (center_x + 12, center_y + 5),
-            (center_x + 5, center_y + 2)
-        ])
-        
-        # 目（怒った赤い目）
-        pygame.draw.circle(surface, Colors.RED, (center_x - 10, center_y - 20), 5)
-        pygame.draw.circle(surface, Colors.RED, (center_x + 10, center_y - 20), 5)
-        pygame.draw.circle(surface, Colors.BLACK, (center_x - 10, center_y - 20), 3)
-        pygame.draw.circle(surface, Colors.BLACK, (center_x + 10, center_y - 20), 3)
-        
-        # 腕（筋肉質）
-        arm_color = head_color
-        pygame.draw.ellipse(surface, arm_color, 
-                          pygame.Rect(center_x - 35, center_y + 10, 15, 30))
-        pygame.draw.ellipse(surface, arm_color, 
-                          pygame.Rect(center_x + 20, center_y + 10, 15, 30))
+            
+            # 体（大きい長方形）
+            body_color = (80, 80, 40) if hp_ratio > 0.3 else (120, 80, 40)
+            pygame.draw.rect(surface, body_color, 
+                            pygame.Rect(center_x - 20, center_y + 5, 40, 50))
+            
+            # 牙
+            tusk_color = Colors.WHITE
+            pygame.draw.polygon(surface, tusk_color, [
+                (center_x - 8, center_y - 5),
+                (center_x - 12, center_y + 5),
+                (center_x - 5, center_y + 2)
+            ])
+            pygame.draw.polygon(surface, tusk_color, [
+                (center_x + 8, center_y - 5),
+                (center_x + 12, center_y + 5),
+                (center_x + 5, center_y + 2)
+            ])
+            
+            # 目（怒った赤い目）
+            pygame.draw.circle(surface, Colors.RED, (center_x - 10, center_y - 20), 5)
+            pygame.draw.circle(surface, Colors.RED, (center_x + 10, center_y - 20), 5)
+            pygame.draw.circle(surface, Colors.BLACK, (center_x - 10, center_y - 20), 3)
+            pygame.draw.circle(surface, Colors.BLACK, (center_x + 10, center_y - 20), 3)
+            
+            # 腕（筋肉質）
+            arm_color = head_color
+            pygame.draw.ellipse(surface, arm_color, 
+                              pygame.Rect(center_x - 35, center_y + 10, 15, 30))
+            pygame.draw.ellipse(surface, arm_color, 
+                              pygame.Rect(center_x + 20, center_y + 10, 15, 30))
     
     @staticmethod
     def _draw_golem(surface: pygame.Surface, center_x: int, center_y: int, 
