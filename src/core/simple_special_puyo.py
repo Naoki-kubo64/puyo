@@ -17,6 +17,10 @@ class SimpleSpecialType(Enum):
     """シンプルな特殊ぷよタイプ"""
     HEAL = "heal"
     BOMB = "bomb"
+    LIGHTNING = "lightning"    # 雷ぷよ：縦一列攻撃
+    SHIELD = "shield"          # 盾ぷよ：ダメージバリア
+    MULTIPLIER = "multiplier"  # 倍率ぷよ：連鎖ダメージ倍率アップ
+    POISON = "poison"          # 毒ぷよ：敵に継続ダメージ
 
 
 class SimpleSpecialPuyo:
@@ -70,8 +74,12 @@ class SimpleSpecialManager:
         
         # 各特殊ぷよタイプの個別出現率（初期値：0%、報酬で獲得）
         self.type_rates: Dict[SimpleSpecialType, float] = {
-            SimpleSpecialType.HEAL: 0.0,  # 0% - 報酬で獲得
-            SimpleSpecialType.BOMB: 0.0,  # 0% - 報酬で獲得
+            SimpleSpecialType.HEAL: 0.0,       # 0% - 報酬で獲得
+            SimpleSpecialType.BOMB: 0.0,       # 0% - 報酬で獲得
+            SimpleSpecialType.LIGHTNING: 0.0,  # 0% - 報酬で獲得
+            SimpleSpecialType.SHIELD: 0.0,     # 0% - 報酬で獲得
+            SimpleSpecialType.MULTIPLIER: 0.0, # 0% - 報酬で獲得
+            SimpleSpecialType.POISON: 0.0,     # 0% - 報酬で獲得
         }
         
         logger.info(f"SimpleSpecialManager initialized with rates: {self._format_rates()}")

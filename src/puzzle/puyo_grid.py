@@ -1162,8 +1162,20 @@ class PuyoGrid:
             # HEAL効果: プレイヤーのHPを回復
             self._apply_heal_effect(10)  # 10HP回復
         elif special_type == SimpleSpecialType.BOMB:
-            # BOMB効果: 周囲のぷよを破壊
-            self._apply_bomb_effect(x, y, 1)  # 1マス範囲爆発
+            # BOMB効果: 全体攻撃
+            self._apply_bomb_effect(x, y, 1)  # 全敵攻撃
+        elif special_type == SimpleSpecialType.LIGHTNING:
+            # LIGHTNING効果: 縦一列攻撃
+            self._apply_lightning_effect(x, y)
+        elif special_type == SimpleSpecialType.SHIELD:
+            # SHIELD効果: ダメージバリア
+            self._apply_shield_effect(15)  # 15ダメージ軽減
+        elif special_type == SimpleSpecialType.MULTIPLIER:
+            # MULTIPLIER効果: 連鎖ダメージ倍率アップ
+            self._apply_multiplier_effect(0.5)  # 50%ダメージアップ
+        elif special_type == SimpleSpecialType.POISON:
+            # POISON効果: 敵に継続ダメージ
+            self._apply_poison_effect(5, 3)  # 5ダメージ×3ターン
         
         # 効果発動後は特殊ぷよデータから削除
         self.remove_special_puyo_data(x, y)
@@ -1260,6 +1272,97 @@ class PuyoGrid:
                     enemies_hit += 1
         
         logger.info(f"BOMB effect: Hit {enemies_hit} enemies for {damage} damage each (chain x{chain_count})")
+    
+    def _apply_lightning_effect(self, center_x: int, center_y: int):
+        """LIGHTNING特殊ぷよの効果を適用 - 縦一列攻撃"""
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("LIGHTNING effect: No battle handler available")
+            return
+        
+        # より強力な単体攻撃
+        player = battle_handler.engine.player
+        chain_count = getattr(player, 'current_chain_count', 1)
+        base_damage = 80  # 爆弾より強い単体ダメージ
+        chain_multiplier = 1.0 + (chain_count - 1) * 0.5
+        damage = int(base_damage * chain_multiplier * player.chain_damage_multiplier)
+        
+        # 最もHPの高い敵1体に攻撃
+        target_enemy = None
+        max_hp = 0
+        if hasattr(battle_handler, 'enemy_group') and battle_handler.enemy_group:
+            for enemy in battle_handler.enemy_group.enemies:
+                alive = enemy.is_alive() if callable(enemy.is_alive) else enemy.is_alive
+                if alive and enemy.current_hp > max_hp:
+                    max_hp = enemy.current_hp
+                    target_enemy = enemy
+        
+        if target_enemy:
+            old_hp = target_enemy.current_hp
+            target_enemy.take_damage(damage)
+            new_hp = target_enemy.current_hp
+            logger.info(f"LIGHTNING effect: {target_enemy.get_display_name()} took {damage} damage ({old_hp} -> {new_hp})")
+        
+        logger.info(f"LIGHTNING effect: Single target {damage} damage (chain x{chain_count})")
+    
+    def _apply_shield_effect(self, shield_amount: int):
+        """SHIELD特殊ぷよの効果を適用"""
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("SHIELD effect: No battle handler available")
+            return
+        
+        # バトルプレイヤーにシールドを追加
+        battle_player = battle_handler.battle_player
+        if hasattr(battle_player, 'shields'):
+            # 既存のシールドに追加
+            if 'basic' in battle_player.shields:
+                battle_player.shields['basic'][0] += shield_amount
+            else:
+                battle_player.shields['basic'] = [shield_amount, 999.0]  # 長時間持続
+            
+            logger.info(f"SHIELD effect: Added {shield_amount} shield points")
+        else:
+            logger.warning("SHIELD effect: Battle player has no shield system")
+    
+    def _apply_multiplier_effect(self, multiplier_bonus: float):
+        """MULTIPLIER特殊ぷよの効果を適用"""
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("MULTIPLIER effect: No battle handler available")
+            return
+        
+        # プレイヤーの攻撃倍率を一時的に上昇
+        player = battle_handler.engine.player
+        old_multiplier = player.chain_damage_multiplier
+        player.chain_damage_multiplier += multiplier_bonus
+        new_multiplier = player.chain_damage_multiplier
+        
+        logger.info(f"MULTIPLIER effect: Damage multiplier {old_multiplier:.1f} -> {new_multiplier:.1f}")
+    
+    def _apply_poison_effect(self, poison_damage: int, duration: int):
+        """POISON特殊ぷよの効果を適用"""
+        battle_handler = self._get_battle_handler()
+        if not battle_handler:
+            logger.warning("POISON effect: No battle handler available")
+            return
+        
+        # 全ての敵に毒効果を付与
+        enemies_poisoned = 0
+        if hasattr(battle_handler, 'enemy_group') and battle_handler.enemy_group:
+            for enemy in battle_handler.enemy_group.enemies:
+                alive = enemy.is_alive() if callable(enemy.is_alive) else enemy.is_alive
+                if alive:
+                    # 敵に毒デバフを追加（簡易実装）
+                    if hasattr(enemy, 'debuffs'):
+                        if 'poison' in enemy.debuffs:
+                            enemy.debuffs['poison'][0] += poison_damage
+                            enemy.debuffs['poison'][1] = max(enemy.debuffs['poison'][1], duration)
+                        else:
+                            enemy.debuffs['poison'] = [poison_damage, duration]
+                    enemies_poisoned += 1
+        
+        logger.info(f"POISON effect: Applied {poison_damage}x{duration} poison to {enemies_poisoned} enemies")
     
     def _get_battle_handler(self):
         """バトルハンドラーを取得"""

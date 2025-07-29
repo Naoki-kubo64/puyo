@@ -22,6 +22,7 @@ class TopUIBar:
         # UI要素の位置
         self.hp_icon_pos = (20, 15)
         self.gold_icon_pos = (380, 15)
+        self.special_puyo_pos = (560, 15)  # 特殊ぷよ表示位置
         self.floor_icon_pos = (SCREEN_WIDTH - 120, 15)
         
         # アニメーション用
@@ -31,7 +32,12 @@ class TopUIBar:
         # アイコン画像を読み込み
         self.hp_icon = None
         self.gold_icon = None
+        self.special_puyo_icons = {}  # 特殊ぷよアイコン辞書
         self._load_icons()
+        
+        # マウスオーバー用
+        self.hover_info = None
+        self.last_mouse_pos = (0, 0)
     
     def update(self, dt: float):
         """UIアニメーションを更新"""
@@ -61,6 +67,24 @@ class TopUIBar:
                 self.gold_icon = pygame.image.load(gold_path).convert_alpha()
                 # サイズを調整（24x24ピクセル）
                 self.gold_icon = pygame.transform.scale(self.gold_icon, (24, 24))
+            
+            # 特殊ぷよアイコンを読み込み
+            picture_path = os.path.join(base_path, "Picture")
+            special_puyo_files = {
+                "heal": "HEAL.png",
+                "bomb": "BOMB.png",
+                "lightning": "LIGHTNING.png",
+                "shield": "SHIELD.png",
+                "multiplier": "Multiplier.png",
+                "poison": "POISON.png"
+            }
+            
+            for puyo_type, filename in special_puyo_files.items():
+                icon_path = os.path.join(picture_path, filename)
+                if os.path.exists(icon_path):
+                    icon = pygame.image.load(icon_path).convert_alpha()
+                    # UIバー用に小さくリサイズ（20x20ピクセル）
+                    self.special_puyo_icons[puyo_type] = pygame.transform.scale(icon, (20, 20))
                 
         except Exception as e:
             print(f"Warning: Could not load UI icons: {e}")
@@ -70,7 +94,7 @@ class TopUIBar:
         self.damage_flash = 1.0
     
     def draw_top_bar(self, surface: pygame.Surface, player_hp: int, player_max_hp: int, 
-                     gold: int, floor: int):
+                     gold: int, floor: int, special_puyo_rates: dict = None):
         """上部UIバーを描画"""
         # 背景バー
         self._draw_background_bar(surface)
@@ -84,11 +108,19 @@ class TopUIBar:
         # ゴールド表示
         self._draw_gold_display(surface, gold)
         
+        # 特殊ぷよ表示
+        if special_puyo_rates:
+            self._draw_special_puyo_display(surface, special_puyo_rates)
+        
         # フロア表示
         self._draw_floor_display(surface, floor)
         
         # 装飾エレメント
         self._draw_decorative_elements(surface)
+        
+        # マウスオーバー情報表示
+        if self.hover_info:
+            self._draw_hover_tooltip(surface)
     
     def _draw_background_bar(self, surface: pygame.Surface):
         """背景バーを描画"""
@@ -287,3 +319,96 @@ class TopUIBar:
         pygame.draw.polygon(surface, corner_color, [
             (SCREEN_WIDTH, 0), (SCREEN_WIDTH - corner_size, 0), (SCREEN_WIDTH, corner_size)
         ])
+    
+    def _draw_special_puyo_display(self, surface: pygame.Surface, special_puyo_rates: dict):
+        """特殊ぷよ表示を描画"""
+        x, y = self.special_puyo_pos
+        
+        # "Special Puyos" ラベル
+        label_font = get_appropriate_font(self.fonts, "Special", 'small')
+        label_surface = label_font.render("Special", True, Colors.LIGHT_GRAY)
+        surface.blit(label_surface, (x, y - 5))
+        
+        # 特殊ぷよアイコンを横に並べて表示
+        icon_spacing = 30
+        current_x = x
+        
+        # 出現率が0%より大きい特殊ぷよのみ表示
+        displayed_count = 0
+        for puyo_type, rate in special_puyo_rates.items():
+            if rate > 0.0 and puyo_type in self.special_puyo_icons:
+                icon = self.special_puyo_icons[puyo_type]
+                icon_rect = pygame.Rect(current_x, y + 12, 20, 20)
+                
+                # アイコンを描画
+                surface.blit(icon, icon_rect)
+                
+                # 出現率をパーセントで表示
+                rate_text = f"{rate*100:.0f}%"
+                rate_font = get_appropriate_font(self.fonts, rate_text, 'small')
+                rate_surface = rate_font.render(rate_text, True, Colors.WHITE)
+                surface.blit(rate_surface, (current_x, y + 35))
+                
+                # マウスオーバー検出領域を記録
+                hover_rect = pygame.Rect(current_x - 5, y + 10, 30, 30)
+                mouse_pos = pygame.mouse.get_pos()
+                if hover_rect.collidepoint(mouse_pos):
+                    self.hover_info = {
+                        'type': puyo_type,
+                        'rate': rate,
+                        'pos': (mouse_pos[0] + 10, mouse_pos[1] - 40)
+                    }
+                
+                current_x += icon_spacing
+                displayed_count += 1
+        
+        # 特殊ぷよを持っていない場合は「なし」と表示
+        if displayed_count == 0:
+            no_special_font = get_appropriate_font(self.fonts, "なし", 'small')
+            no_special_surface = no_special_font.render("なし", True, Colors.GRAY)
+            surface.blit(no_special_surface, (current_x, y + 20))
+    
+    def _draw_hover_tooltip(self, surface: pygame.Surface):
+        """マウスオーバー時のツールチップを描画"""
+        if not self.hover_info:
+            return
+        
+        puyo_type = self.hover_info['type']
+        rate = self.hover_info['rate']
+        pos = self.hover_info['pos']
+        
+        # 特殊ぷよの効果説明
+        effects = {
+            'heal': 'HP回復: プレイヤーのHPを10回復',
+            'bomb': '爆弾: 全ての敵に攻撃',
+            'lightning': '雷: 最強の敵1体に強力攻撃',
+            'shield': 'シールド: ダメージを15軽減',
+            'multiplier': '倍率: 攻撃力を50%上昇',
+            'poison': '毒: 全ての敵に継続ダメージ'
+        }
+        
+        effect_text = effects.get(puyo_type, '特殊効果')
+        rate_text = f'出現率: {rate*100:.0f}%'
+        
+        # ツールチップの背景サイズを計算
+        font = get_appropriate_font(self.fonts, effect_text, 'small')
+        effect_surface = font.render(effect_text, True, Colors.WHITE)
+        rate_surface = font.render(rate_text, True, Colors.WHITE)
+        
+        tooltip_width = max(effect_surface.get_width(), rate_surface.get_width()) + 20
+        tooltip_height = 50
+        
+        # ツールチップの背景
+        tooltip_rect = pygame.Rect(pos[0], pos[1], tooltip_width, tooltip_height)
+        pygame.draw.rect(surface, (40, 40, 40), tooltip_rect)
+        pygame.draw.rect(surface, (100, 100, 100), tooltip_rect, 1)
+        
+        # テキストを描画
+        surface.blit(effect_surface, (pos[0] + 10, pos[1] + 5))
+        surface.blit(rate_surface, (pos[0] + 10, pos[1] + 25))
+    
+    def handle_mouse_motion(self, mouse_pos: tuple):
+        """マウス移動イベント処理"""
+        self.last_mouse_pos = mouse_pos
+        # hover_infoは_draw_special_puyo_displayで更新される
+        self.hover_info = None
