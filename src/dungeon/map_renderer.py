@@ -170,23 +170,15 @@ class MapRenderer:
             logger.warning(f"Could not load status icons: {e}")
     
     def _load_special_puyo_images(self):
-        """特殊ぷよの画像を読み込み"""
+        """特殊ぷよの画像を読み込み（SimpleSpecialTypeシステム対応）"""
         try:
-            from special_puyo.special_puyo import SpecialPuyoType
-            
             # Pictureフォルダから特殊ぷよ画像を読み込み
             base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             
+            # SimpleSpecialTypeシステムに対応した画像マッピング
             image_mapping = {
-                SpecialPuyoType.BOMB: "BOMB.png",
-                SpecialPuyoType.LIGHTNING: "LIGHTNING.png",
-                SpecialPuyoType.RAINBOW: "RAINBOW.png",
-                SpecialPuyoType.MULTIPLIER: "Multiplier.png",
-                SpecialPuyoType.FREEZE: "FREEZE.png",
-                SpecialPuyoType.HEAL: "HEAL.png",
-                SpecialPuyoType.SHIELD: "SHIELD.png",
-                SpecialPuyoType.POISON: "POISON.png",  
-                SpecialPuyoType.CHAIN_STARTER: "CHAIN_STARTER.png"
+                "heal": "HEAL.png",
+                "bomb": "BOMB.png",
             }
             
             for puyo_type, filename in image_mapping.items():
@@ -691,8 +683,7 @@ class MapRenderer:
             hp_text = f"{player.hp}/{player.max_hp}"
             gold_text = f"{player.gold}"
             
-            # 特殊アイテム情報
-            special_puyo_count = 0
+            # アイテム情報
             potion_count = 0
             artifact_count = 0
             
@@ -705,12 +696,12 @@ class MapRenderer:
                                 potion_count += item.quantity
                             elif item_type_str == 'artifact':
                                 artifact_count += item.quantity
-                            elif item_type_str == 'special_puyo':
-                                special_puyo_count += item.quantity
                         except:
                             continue
             
-            special_text = f"Special: {special_puyo_count}"
+            # 特殊ぷよの出現率情報
+            special_puyo_rates = getattr(player, 'special_puyo_rates', {})
+            
             potion_text = f"Potions: {potion_count}"
             artifact_text = f"Artifacts: {artifact_count}"
             
@@ -740,11 +731,30 @@ class MapRenderer:
                 gold_text_surface = font_medium.render(gold_text_full, True, Colors.YELLOW)
                 surface.blit(gold_text_surface, (x_positions[1], y_pos))
             
-            # その他のステータス（テキストのみ）
-            other_texts = [special_text, potion_text, artifact_text]
-            other_colors = [Colors.CYAN, Colors.PURPLE, Colors.ORANGE]
+            # 特殊ぷよ表示（アイコン付き）
+            special_x = x_positions[2]
+            special_label = font_small.render("Special:", True, Colors.LIGHT_GRAY)
+            surface.blit(special_label, (special_x, y_pos - 15))
             
-            for i, (text, color) in enumerate(zip(other_texts, other_colors), start=2):
+            icon_x = special_x
+            for puyo_type, rate in special_puyo_rates.items():
+                if puyo_type in self.special_puyo_images:
+                    # アイコンを描画
+                    icon = self.special_puyo_images[puyo_type]
+                    surface.blit(icon, (icon_x, y_pos))
+                    
+                    # 出現率を描画
+                    rate_text = f"{rate*100:.0f}%"
+                    rate_surface = font_small.render(rate_text, True, Colors.WHITE)
+                    surface.blit(rate_surface, (icon_x, y_pos + 25))
+                    
+                    icon_x += 40
+            
+            # その他のステータス（テキストのみ）
+            other_texts = [potion_text, artifact_text]
+            other_colors = [Colors.PURPLE, Colors.ORANGE]
+            
+            for i, (text, color) in enumerate(zip(other_texts, other_colors), start=3):
                 if i < len(x_positions):
                     text_surface = font_medium.render(text, True, color)
                     surface.blit(text_surface, (x_positions[i], y_pos))

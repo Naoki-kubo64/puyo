@@ -677,6 +677,10 @@ class BattleHandler:
     
     def handle_event(self, event: pygame.event.Event):
         """イベント処理"""
+        # マウス移動イベント処理（TopUIBarのホバー効果用）
+        if event.type == pygame.MOUSEMOTION:
+            self.top_ui_bar.handle_mouse_motion(event.pos)
+        
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1 and self.battle_active:  # 左クリック
                 # 敵選択
@@ -813,11 +817,15 @@ class BattleHandler:
             self.top_ui_bar.trigger_damage_flash()
         
         logger.debug("Drawing top UI bar...")
+        # 特殊ぷよの出現率データを取得
+        special_puyo_rates = self.player.special_puyo_rates if hasattr(self.player, 'special_puyo_rates') else {}
+        
         self.top_ui_bar.draw_top_bar(
             surface,
             self.player.hp, self.player.max_hp,
             self.player.gold,   # ゴールド
-            self.floor_level
+            self.floor_level,
+            special_puyo_rates  # 特殊ぷよ出現率
         )
         
         # ぷよぷよフィールド描画（背景の上に）

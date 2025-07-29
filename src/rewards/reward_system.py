@@ -100,7 +100,7 @@ class RewardGenerator:
             value=gold_amount,
             name=f"{gold_amount} ゴールド",
             description="冒険に必要な通貨",
-            rarity=Rarity.COMMON
+            rarity=ItemRarity.COMMON
         ))
         
         # 選択肢数を決定
@@ -226,16 +226,24 @@ class RewardGenerator:
             return None
             
         elif reward_type == RewardType.SPECIAL_PUYO:
-            # ランダムな特殊ぷよタイプを選択
-            from special_puyo.special_puyo import SpecialPuyoType
-            available_types = list(SpecialPuyoType)
+            # ランダムな特殊ぷよタイプを選択（新しいSimpleSpecialTypeシステム）
+            from core.simple_special_puyo import SimpleSpecialType
+            available_types = list(SimpleSpecialType)
             selected_type = random.choice(available_types)
+            
+            # 各タイプの日本語名とアイコン
+            type_info = {
+                SimpleSpecialType.HEAL: {"name": "回復ぷよ", "icon": "♥", "desc": "着地時にHP回復"},
+                SimpleSpecialType.BOMB: {"name": "爆弾ぷよ", "icon": "💣", "desc": "着地時に周囲を破壊"},
+            }
+            
+            info = type_info.get(selected_type, {"name": "特殊ぷよ", "icon": "⭐", "desc": "特殊効果"})
             
             return Reward(
                 reward_type=RewardType.SPECIAL_PUYO,
                 value=selected_type,
-                name=f"{selected_type.value.title()} Puyo",
-                description=f"新しい特殊ぷよ『{selected_type.value}』を獲得",
+                name=info["name"],
+                description=f"{info['desc']} (出現率+5%)",
                 rarity=ItemRarity.RARE
             )
         
@@ -330,6 +338,10 @@ class RewardSelectionHandler:
     def _return_to_dungeon_map(self):
         """ダンジョンマップに戻る"""
         try:
+            # 選択された報酬を適用
+            if self.selected_reward:
+                self._apply_selected_reward(self.selected_reward)
+            
             from dungeon.map_handler import DungeonMapHandler
             
             # 報酬選択完了時：戦闘勝利によるマップ進行処理を実行
@@ -364,6 +376,43 @@ class RewardSelectionHandler:
             logger.error(f"Failed to return to dungeon map: {e}")
             # フォールバック: メニューに戻る
             self.engine.change_state(GameState.MENU)
+    
+    def _apply_selected_reward(self, reward: Reward):
+        """選択された報酬を適用"""
+        try:
+            player = self.engine.player
+            
+            if reward.reward_type == RewardType.GOLD:
+                player.add_gold(reward.value)
+                logger.info(f"Applied gold reward: +{reward.value} gold")
+            
+            elif reward.reward_type == RewardType.HP_UPGRADE:
+                player.increase_max_hp(reward.value)
+                logger.info(f"Applied HP upgrade: +{reward.value} max HP")
+            
+            elif reward.reward_type == RewardType.POTION:
+                player.add_potion(reward.value)
+                logger.info(f"Applied potion reward: {reward.value}")
+            
+            elif reward.reward_type == RewardType.ARTIFACT:
+                player.add_artifact(reward.value)
+                logger.info(f"Applied artifact reward: {reward.value}")
+            
+            elif reward.reward_type == RewardType.CHAIN_UPGRADE:
+                player.increase_chain_damage_multiplier(0.1)  # 10%アップ
+                logger.info(f"Applied chain upgrade: +10% chain damage")
+            
+            elif reward.reward_type == RewardType.SPECIAL_PUYO:
+                # 特殊ぷよの出現率を上昇（プレイヤーデータ経由で永続化）
+                special_type = reward.value
+                new_rate = player.increase_special_puyo_rate(special_type.value, 0.05)  # 5%上昇
+                logger.info(f"Applied special puyo reward: {special_type.value} rate increased to {new_rate*100:.0f}%")
+            
+            else:
+                logger.warning(f"Unknown reward type: {reward.reward_type}")
+                
+        except Exception as e:
+            logger.error(f"Failed to apply reward {reward.name}: {e}")
     
     def render(self, surface: pygame.Surface):
         """描画処理"""
@@ -475,13 +524,36 @@ class RewardSelectionHandler:
             surface.blit(value_text, value_rect)
         
         elif reward.reward_type == RewardType.SPECIAL_PUYO:
-            # 特殊ぷよアイコン
-            icon_text = font_medium.render("⭐", True, Colors.YELLOW)
-            icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
-            surface.blit(icon_text, icon_rect)
+            # 特殊ぷよアイコン（SimpleSpecialType対応）
+            from core.simple_special_puyo import SimpleSpecialType
             
-            # 特殊ぷよ名
-            value_text = font_small.render(f"{reward.value.value.title()}", True, Colors.YELLOW)
+            # タイプに応じたアイコン選択
+            icon_map = {
+                SimpleSpecialType.HEAL: "♥",
+                SimpleSpecialType.BOMB: "💣",
+            }
+            
+            icon_char = icon_map.get(reward.value, "⭐")
+            color = Colors.GREEN if reward.value == SimpleSpecialType.HEAL else Colors.RED
+            
+            try:
+                icon_text = font_medium.render(icon_char, True, color)
+                icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
+                surface.blit(icon_text, icon_rect)
+            except:
+                # Unicodeエラーの場合は代替アイコン
+                icon_text = font_medium.render("*", True, color)
+                icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
+                surface.blit(icon_text, icon_rect)
+            
+            # 特殊ぷよ名（日本語対応）
+            type_names = {
+                SimpleSpecialType.HEAL: "HEAL",
+                SimpleSpecialType.BOMB: "BOMB",
+            }
+            
+            type_name = type_names.get(reward.value, "SPECIAL")
+            value_text = font_small.render(type_name, True, color)
             value_rect = value_text.get_rect(center=(card_rect.centerx, icon_y + 60))
             surface.blit(value_text, value_rect)
         
