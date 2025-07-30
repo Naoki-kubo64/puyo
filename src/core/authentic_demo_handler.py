@@ -844,7 +844,7 @@ class AuthenticDemoHandler:
         
         # 本家風タイミング制御（最適化）
         self.spawn_timer = 0.0
-        self.spawn_interval = 0.35  # チェイン完了を待つための適切な間隔
+        self.spawn_interval = 0.05  # 着地後すぐに次のぷよをスポーン（50ms）
         
         # 本家風チェイン処理
         self.chain_delay_timer = 0.0
@@ -938,14 +938,9 @@ class AuthenticDemoHandler:
         self.total_score = 0
         self.total_chains = 0
         
-        # バトルハンドラーのカウントダウン中でなければ最初のペアをスポーン
-        if (not self.parent_battle_handler or 
-            not hasattr(self.parent_battle_handler, 'countdown_active') or 
-            not self.parent_battle_handler.countdown_active):
-            logger.info("Game reset - spawning initial pair immediately")
-            self._spawn_new_pair()
-        else:
-            logger.info("Game reset - delaying initial pair spawn due to countdown")
+        # 常に最初のペアをスポーン（カウントダウン中でも回転できるように）
+        logger.info("Game reset - spawning initial pair for immediate control")
+        self._spawn_new_pair()
     
     def update(self, dt: float):
         """更新処理"""
@@ -961,15 +956,20 @@ class AuthenticDemoHandler:
         # 継続的なキー入力処理
         self._handle_continuous_input()
         
-        # 現在のペア更新
-        if self.current_pair and self.current_pair.active:
+        # カウントダウン中は落下を停止、それ以外は通常更新
+        countdown_active = (self.parent_battle_handler and 
+                           hasattr(self.parent_battle_handler, 'countdown_active') and 
+                           self.parent_battle_handler.countdown_active)
+        
+        # 現在のペア更新（カウントダウン中は落下停止）
+        if self.current_pair and self.current_pair.active and not countdown_active:
             if self.current_pair.update(dt, self.puyo_grid):
                 # ペアが完全に着地
                 logger.info(f"PAIR LANDED AND LOCKED - STARTING CHAIN CHECK")
                 self.current_pair = None
                 self.pending_chain_check = True
                 self.chain_delay_timer = 0.0
-        elif self.current_pair and not self.current_pair.active:
+        elif self.current_pair and not self.current_pair.active and not countdown_active:
             # ペアが非アクティブになった場合の緊急処理
             logger.warning("WARNING: PAIR BECAME INACTIVE WITHOUT PROPER LANDING - FORCING COMPLETION")
             self.current_pair = None
@@ -1018,11 +1018,9 @@ class AuthenticDemoHandler:
     
     def _handle_continuous_input(self):
         """継続的なキー入力処理"""
-        # カウントダウン中は操作を無効にする
-        if (self.parent_battle_handler and 
-            hasattr(self.parent_battle_handler, 'countdown_active') and 
-            self.parent_battle_handler.countdown_active):
-            return
+        # カウントダウン中は移動操作のみ無効にする（回転は許可）
+        # 注意：この関数は移動処理のみなので、カウントダウン中でも呼び出しを許可
+        # 回転は handle_event() で処理されるため、別途制御される
         
         if not self.current_pair or not self.current_pair.active:
             return
@@ -1038,26 +1036,36 @@ class AuthenticDemoHandler:
         
         keys = pygame.key.get_pressed()
         
-        # 横移動の継続的な処理（移動速度制限付き）
-        if not hasattr(self, 'move_timer'):
-            self.move_timer = 0.0
+        # カウントダウン中は移動を制限
+        countdown_active = (self.parent_battle_handler and 
+                           hasattr(self.parent_battle_handler, 'countdown_active') and 
+                           self.parent_battle_handler.countdown_active)
         
-        current_time = pygame.time.get_ticks() / 1000.0
+        if not countdown_active:
+            # 横移動の継続的な処理（移動速度制限付き）
+            if not hasattr(self, 'move_timer'):
+                self.move_timer = 0.0
+            
+            current_time = pygame.time.get_ticks() / 1000.0
+            
+            # A/Dキーの継続的な処理（0.12秒間隔で本家に近い移動速度）
+            if keys[pygame.K_a] and (current_time - self.move_timer) > 0.12:
+                if self.current_pair.try_move_horizontal(-1, self.puyo_grid):
+                    logger.debug("Continuous left move")
+                    self.move_timer = current_time
+            elif keys[pygame.K_d] and (current_time - self.move_timer) > 0.12:
+                if self.current_pair.try_move_horizontal(1, self.puyo_grid):
+                    logger.debug("Continuous right move")
+                    self.move_timer = current_time
         
-        # A/Dキーの継続的な処理（0.12秒間隔で本家に近い移動速度）
-        if keys[pygame.K_a] and (current_time - self.move_timer) > 0.12:
-            if self.current_pair.try_move_horizontal(-1, self.puyo_grid):
-                logger.debug("Continuous left move")
-                self.move_timer = current_time
-        elif keys[pygame.K_d] and (current_time - self.move_timer) > 0.12:
-            if self.current_pair.try_move_horizontal(1, self.puyo_grid):
-                logger.debug("Continuous right move")
-                self.move_timer = current_time
-        
-        # S キーの継続的な高速落下
-        if keys[pygame.K_s]:
-            self.current_pair.set_fast_fall(True)
+        # S キーの継続的な高速落下（カウントダウン中は無効）
+        if not countdown_active:
+            if keys[pygame.K_s]:
+                self.current_pair.set_fast_fall(True)
+            else:
+                self.current_pair.set_fast_fall(False)
         else:
+            # カウントダウン中は高速落下を無効
             self.current_pair.set_fast_fall(False)
     
     def _spawn_new_pair(self):
@@ -1226,14 +1234,7 @@ class AuthenticDemoHandler:
     
     def handle_event(self, event: pygame.event.Event):
         """イベント処理"""
-        # カウントダウン中は操作を無効にする
-        if (self.parent_battle_handler and 
-            hasattr(self.parent_battle_handler, 'countdown_active') and 
-            self.parent_battle_handler.countdown_active):
-            # カウントダウン中はESCAPEキーのみ許可
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                self.engine.change_state(GameState.MENU)
-            return
+        # 回転は常に許可、他の操作のみカウントダウンで制限
         
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
@@ -1249,11 +1250,10 @@ class AuthenticDemoHandler:
             elif event.key == pygame.K_c:
                 self._execute_chain_check()
             
-            # 本家風ペア操作（活発なペアがある場合、連鎖中でない場合）
-            elif (self.current_pair and self.current_pair.active and 
-                  not self.puyo_grid.chain_animation_active):
+            # 本家風ペア操作（回転は常に許可、移動は条件付き）
+            elif self.current_pair and self.current_pair.active:
                 if event.key == pygame.K_SPACE:
-                    # 時計回り回転（本家の標準操作）
+                    # 時計回り回転（カウントダウン中や連鎖中でも許可）
                     logger.debug(f"SPACE pressed - attempting clockwise rotation (current: {self.current_pair.rotation})")
                     if self.current_pair.try_rotate(True, self.puyo_grid):
                         logger.debug(f"SUCCESS: Pair rotated clockwise to {self.current_pair.rotation}")
@@ -1261,7 +1261,7 @@ class AuthenticDemoHandler:
                         logger.warning(f"FAILED: Clockwise rotation blocked (position: {self.current_pair.center_x}, {self.current_pair.center_y})")
                 
                 elif event.key == pygame.K_w:
-                    # 反時計回り回転（本家の追加操作）
+                    # 反時計回り回転（カウントダウン中や連鎖中でも許可）
                     logger.debug(f"W pressed - attempting counter-clockwise rotation (current: {self.current_pair.rotation})")
                     if self.current_pair.try_rotate(False, self.puyo_grid):
                         logger.debug(f"SUCCESS: Pair rotated counter-clockwise to {self.current_pair.rotation}")

@@ -73,7 +73,8 @@ class TopUIBar:
                 self.gold_icon = pygame.transform.scale(self.gold_icon, (24, 24))
             
             # 特殊ぷよアイコンを読み込み
-            picture_path = os.path.join(base_path, "Picture")
+            picture_path = os.path.join(base_path, "assets")
+            
             special_puyo_files = {
                 "heal": "HEAL.png",
                 "bomb": "BOMB.png",
@@ -332,6 +333,8 @@ class TopUIBar:
         """特殊ぷよ表示を描画"""
         x, y = self.special_puyo_pos
         
+        # 特殊ぷよ表示処理開始
+        
         # "Special Puyos" ラベル
         label_font = get_appropriate_font(self.fonts, "Special", 'small')
         label_surface = label_font.render("Special", True, Colors.LIGHT_GRAY)
@@ -380,9 +383,9 @@ class TopUIBar:
         """ポーション表示を描画"""
         x, y = self.potion_pos
         
-        # "Potions" ラベル
+        # "Potions" ラベル（より明るくして視認性向上）
         label_font = get_appropriate_font(self.fonts, "Potions", 'small')
-        label_surface = label_font.render("Potions", True, Colors.LIGHT_GRAY)
+        label_surface = label_font.render("Potions", True, Colors.WHITE)
         surface.blit(label_surface, (x, y - 5))
         
         # ポーションを取得
@@ -398,13 +401,23 @@ class TopUIBar:
                 if i >= 4:  # 4個以上は省略
                     break
                 
-                # ポーションアイコン（簡単な円で表現）
-                potion_rect = pygame.Rect(current_x, y + 12, 24, 24)
+                # ポーションアイコン（簡単な円で表現） - サイズを大きくして視認性向上
+                potion_rect = pygame.Rect(current_x, y + 12, 28, 28)
                 
-                # レアリティに応じた色
-                potion_color = potion.rarity.color if hasattr(potion.rarity, 'color') else Colors.GREEN
-                pygame.draw.circle(surface, potion_color, potion_rect.center, 12)
-                pygame.draw.circle(surface, Colors.WHITE, potion_rect.center, 12, 2)
+                # レアリティに応じた色（視認性向上のため明るく調整）
+                if hasattr(potion.rarity, 'color'):
+                    base_color = potion.rarity.color
+                    # 色を明るくして視認性を向上
+                    potion_color = tuple(min(255, int(c * 1.5)) for c in base_color)
+                else:
+                    potion_color = (0, 255, 0)  # 明るい緑
+                
+                # 背景として暗い縁を描画（サイズ増加）
+                pygame.draw.circle(surface, (50, 50, 50), potion_rect.center, 16)
+                # メインのポーション円（サイズ増加）
+                pygame.draw.circle(surface, potion_color, potion_rect.center, 14)
+                # 白い縁（サイズ増加）
+                pygame.draw.circle(surface, Colors.WHITE, potion_rect.center, 14, 2)
                 
                 # 数量表示
                 if potion.quantity > 1:
