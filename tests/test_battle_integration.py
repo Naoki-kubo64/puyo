@@ -6,9 +6,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 import pygame
 pygame.init()
 
-from src.battle.battle_handler import Player, BattleHandler
-from src.core.game_engine import GameEngine
-from src.special_puyo.special_puyo import SpecialPuyoType, SpecialPuyo
+from battle.battle_handler import Player, BattleHandler
+from core.game_engine import GameEngine
+from special_puyo.special_puyo import SpecialPuyoType, SpecialPuyo
 
 print('=== BATTLE INTEGRATION TEST ===')
 
