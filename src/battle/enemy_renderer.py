@@ -50,7 +50,7 @@ class EnemyRenderer:
         try:
             import os
             # slime.png画像を読み込み
-            image_path = os.path.join(os.path.dirname(__file__), '..', '..', 'slime.png')
+            image_path = os.path.join(os.path.dirname(__file__), '..', '..', 'assets', 'slime.png')
             slime_image = pygame.image.load(image_path)
             # 敵のサイズに合わせてスケール（240x240）
             slime_image = pygame.transform.scale(slime_image, (240, 240))
@@ -101,7 +101,7 @@ class EnemyRenderer:
         try:
             import os
             # goblin.png画像を読み込み
-            image_path = os.path.join(os.path.dirname(__file__), '..', '..', 'goblin.png')
+            image_path = os.path.join(os.path.dirname(__file__), '..', '..', 'assets', 'goblin.png')
             goblin_image = pygame.image.load(image_path)
             # ゴブリンをさらに大きく表示（280x280）
             goblin_image = pygame.transform.scale(goblin_image, (280, 280))

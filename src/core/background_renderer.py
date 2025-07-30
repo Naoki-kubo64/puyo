@@ -20,7 +20,7 @@ class BackgroundRenderer:
         try:
             import os
             # プロジェクトルートの背景.pngを使用
-            image_path = os.path.join(os.path.dirname(__file__), '..', '..', '背景.png')
+            image_path = os.path.join(os.path.dirname(__file__), '..', '..', 'assets', '背景.png')
             self.background_image = pygame.image.load(image_path)
             # 画面サイズに合わせてスケール
             self.background_image = pygame.transform.scale(self.background_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
