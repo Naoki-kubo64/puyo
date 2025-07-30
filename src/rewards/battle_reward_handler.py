@@ -5,12 +5,15 @@ Slay the Spire風の報酬選択画面
 
 import pygame
 import random
+import logging
 from typing import List, Optional
 from core.state_handler import StateHandler
 from core.constants import GameState, Colors
 from core.game_engine import GameEngine
 from inventory.player_inventory import create_item, ItemRarity
 from .reward_system import Reward, RewardType
+
+logger = logging.getLogger(__name__)
 
 class BattleRewardHandler(StateHandler):
     def __init__(self, engine: GameEngine, enemy_type: str = "normal", floor: int = 1):
@@ -275,7 +278,12 @@ class BattleRewardHandler(StateHandler):
             # 特殊ぷよをプレイヤーの所持リストに追加
             special_puyo_type = reward.value
             self.engine.player.add_special_puyo(special_puyo_type)
-            print(f"新しい特殊ぷよ『{special_puyo_type.value}』を獲得しました！")
+            try:
+                display_name = special_puyo_type.get_display_name()
+                print(f"新しい特殊ぷよ『{display_name}』を獲得しました！")
+            except Exception as e:
+                print(f"新しい特殊ぷよ『{special_puyo_type.value}』を獲得しました！")
+                logger.warning(f"Error getting special puyo display name: {e}")
             
         elif reward.reward_type == RewardType.CHAIN_UPGRADE:
             # 連鎖ダメージ倍率を上昇

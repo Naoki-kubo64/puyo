@@ -156,4 +156,20 @@ The project includes comprehensive test files covering different aspects:
 - Reward and scaling systems
 - UI and input responsiveness
 
+## GitHub
+Every time you add a new feature or make a fix, create a new branch and commit.
+
+## ゴール
+常に新しいGitブランチを作成し、そのブランチにファイル変更をコミットしてPushしてください。
+
+## 実行手順
+1. `main`ブランチから始めてください。
+2. 新しい変更を加えるたびに、ランダムな名前または内容に基づいた新規ブランチを `git checkout -b` で作成してください。
+3. ファイルを編集後、以下のコマンドを順に実行してください:
+
+```bash
+git add .
+git commit -m "目的に沿ったコミットメッセージを記載"
+git push origin <新しいブランチ名>
+
 Run tests individually to verify specific components before making changes to related systems.

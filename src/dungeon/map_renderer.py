@@ -40,6 +40,10 @@ class MapRenderer:
         self.special_puyo_images = {}
         self._load_special_puyo_images()
         
+        # マウスオーバー用
+        self.hover_info = None
+        self.special_puyo_hover_areas = []
+        
         # スクロール機能
         self.scroll_y = 0
         self.max_scroll_y = 0
@@ -175,10 +179,14 @@ class MapRenderer:
             # Pictureフォルダから特殊ぷよ画像を読み込み
             base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             
-            # SimpleSpecialTypeシステムに対応した画像マッピング
+            # SimpleSpecialTypeシステムに対応した画像マッピング（バトル画面と同じ）
             image_mapping = {
                 "heal": "HEAL.png",
                 "bomb": "BOMB.png",
+                "lightning": "LIGHTNING.png",
+                "shield": "SHIELD.png",
+                "multiplier": "Multiplier.png",
+                "poison": "POISON.png"
             }
             
             for puyo_type, filename in image_mapping.items():
@@ -629,6 +637,7 @@ class MapRenderer:
     def handle_mouse_motion(self, pos: Tuple[int, int]):
         """マウス移動処理 - ホバー状態を更新（アイコン画像基準）"""
         self.hovered_node = None
+        self.hover_info = None  # ホバー情報をクリア
         
         for node in self.dungeon_map.nodes.values():
             node_pos = self._get_node_position(node)
@@ -731,24 +740,46 @@ class MapRenderer:
                 gold_text_surface = font_medium.render(gold_text_full, True, Colors.YELLOW)
                 surface.blit(gold_text_surface, (x_positions[1], y_pos))
             
-            # 特殊ぷよ表示（アイコン付き）
+            # 特殊ぷよ表示（アイコン付き、バトル画面と同じ仕様）
             special_x = x_positions[2]
             special_label = font_small.render("Special:", True, Colors.LIGHT_GRAY)
             surface.blit(special_label, (special_x, y_pos - 15))
             
             icon_x = special_x
+            displayed_special_count = 0
+            
+            # マウスオーバーエリアをクリア
+            self.special_puyo_hover_areas = []
+            
             for puyo_type, rate in special_puyo_rates.items():
-                if puyo_type in self.special_puyo_images:
+                # 出現率が0%より大きい特殊ぷよのみ表示（バトル画面と同じ仕様）
+                if rate > 0.0 and puyo_type in self.special_puyo_images:
                     # アイコンを描画
                     icon = self.special_puyo_images[puyo_type]
-                    surface.blit(icon, (icon_x, y_pos))
+                    icon_rect = pygame.Rect(icon_x, y_pos, 25, 25)
+                    surface.blit(icon, icon_rect)
                     
                     # 出現率を描画
                     rate_text = f"{rate*100:.0f}%"
                     rate_surface = font_small.render(rate_text, True, Colors.WHITE)
                     surface.blit(rate_surface, (icon_x, y_pos + 25))
                     
+                    # マウスオーバー検出エリアを記録
+                    hover_rect = pygame.Rect(icon_x - 5, y_pos - 5, 35, 35)
+                    self.special_puyo_hover_areas.append((hover_rect, puyo_type, rate))
+                    
+                    # マウスオーバー検出
+                    mouse_pos = pygame.mouse.get_pos()
+                    if hover_rect.collidepoint(mouse_pos):
+                        self._set_special_puyo_hover_info(puyo_type, rate, mouse_pos)
+                    
                     icon_x += 40
+                    displayed_special_count += 1
+            
+            # 特殊ぷよを持っていない場合は「なし」と表示（バトル画面と同じ）
+            if displayed_special_count == 0:
+                no_special_text = font_small.render("なし", True, Colors.GRAY)
+                surface.blit(no_special_text, (icon_x, y_pos + 10))
             
             # その他のステータス（テキストのみ）
             other_texts = [potion_text, artifact_text]
@@ -770,6 +801,104 @@ class MapRenderer:
                 surface.blit(error_text, (50, 25))
             except:
                 pass  # フォントがない場合は何も表示しない
+        
+        # 特殊ぷよのマウスオーバー詳細表示
+        if self.hover_info:
+            self._render_special_puyo_tooltip(surface, fonts)
+    
+    def _set_special_puyo_hover_info(self, puyo_type: str, rate: float, mouse_pos: tuple):
+        """特殊ぷよのホバー情報を設定"""
+        try:
+            from core.simple_special_puyo import SimpleSpecialType
+            
+            # puyo_typeが文字列の場合、SimpleSpecialTypeに変換
+            if isinstance(puyo_type, str):
+                for special_type in SimpleSpecialType:
+                    if special_type.value == puyo_type:
+                        puyo_enum = special_type
+                        break
+                else:
+                    puyo_enum = None
+            else:
+                puyo_enum = puyo_type
+            
+            if puyo_enum:
+                display_name = puyo_enum.get_display_name()
+                description = puyo_enum.get_description()
+                
+                self.hover_info = {
+                    'type': 'special_puyo',
+                    'name': display_name,
+                    'description': description,
+                    'rate': rate,
+                    'pos': (mouse_pos[0] + 10, mouse_pos[1] - 60)
+                }
+        except Exception as e:
+            logger.warning(f"Error setting special puyo hover info: {e}")
+    
+    def _render_special_puyo_tooltip(self, surface: pygame.Surface, fonts: Dict[str, pygame.font.Font]):
+        """特殊ぷよツールチップを描画"""
+        if not self.hover_info or self.hover_info['type'] != 'special_puyo':
+            return
+        
+        try:
+            from core.game_engine import get_appropriate_font
+            
+            name = self.hover_info['name']
+            description = self.hover_info['description']
+            rate = self.hover_info['rate']
+            pos = self.hover_info['pos']
+            
+            # ツールチップテキスト
+            lines = [
+                name,
+                description,
+                f"出現率: {rate*100:.0f}%"
+            ]
+            
+            # フォントサイズを計算
+            font_small = fonts.get('small', pygame.font.Font(None, 16))
+            
+            # ツールチップサイズを計算
+            max_width = 0
+            line_height = 20
+            rendered_lines = []
+            
+            for line in lines:
+                try:
+                    font = get_appropriate_font(fonts, line, 'small')
+                    rendered = font.render(line, True, Colors.WHITE)
+                    rendered_lines.append(rendered)
+                    max_width = max(max_width, rendered.get_width())
+                except:
+                    # フォールバック
+                    rendered = font_small.render(line, True, Colors.WHITE)
+                    rendered_lines.append(rendered)
+                    max_width = max(max_width, rendered.get_width())
+            
+            tooltip_width = max_width + 20
+            tooltip_height = len(lines) * line_height + 10
+            
+            # 画面境界チェック
+            tooltip_x, tooltip_y = pos
+            if tooltip_x + tooltip_width > SCREEN_WIDTH:
+                tooltip_x = pos[0] - tooltip_width - 20
+            if tooltip_y < 0:
+                tooltip_y = 10
+            elif tooltip_y + tooltip_height > SCREEN_HEIGHT:
+                tooltip_y = SCREEN_HEIGHT - tooltip_height - 10
+            
+            # ツールチップ背景
+            tooltip_rect = pygame.Rect(tooltip_x, tooltip_y, tooltip_width, tooltip_height)
+            pygame.draw.rect(surface, (40, 40, 40), tooltip_rect)
+            pygame.draw.rect(surface, (120, 120, 120), tooltip_rect, 2)
+            
+            # テキストを描画
+            for i, rendered_line in enumerate(rendered_lines):
+                surface.blit(rendered_line, (tooltip_x + 10, tooltip_y + 5 + i * line_height))
+                
+        except Exception as e:
+            logger.warning(f"Error rendering special puyo tooltip: {e}")
 
 
 if __name__ == "__main__":

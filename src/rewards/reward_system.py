@@ -231,19 +231,33 @@ class RewardGenerator:
             available_types = list(SimpleSpecialType)
             selected_type = random.choice(available_types)
             
-            # 各タイプの日本語名とアイコン
-            type_info = {
-                SimpleSpecialType.HEAL: {"name": "回復ぷよ", "icon": "♥", "desc": "着地時にHP回復"},
-                SimpleSpecialType.BOMB: {"name": "爆弾ぷよ", "icon": "💣", "desc": "着地時に周囲を破壊"},
-            }
-            
-            info = type_info.get(selected_type, {"name": "特殊ぷよ", "icon": "⭐", "desc": "特殊効果"})
+            # SimpleSpecialTypeのメソッドを安全に使用
+            try:
+                name = selected_type.get_display_name()
+                base_description = selected_type.get_description()
+                
+                # より詳細な効果説明を追加
+                detailed_descriptions = {
+                    SimpleSpecialType.HEAL: "プレイヤーのHPを10回復する",
+                    SimpleSpecialType.BOMB: "全ての敵に攻撃ダメージを与える",
+                    SimpleSpecialType.LIGHTNING: "最強の敵1体に強力な攻撃",
+                    SimpleSpecialType.SHIELD: "次に受けるダメージを15軽減",
+                    SimpleSpecialType.MULTIPLIER: "攻撃力を50%アップする",
+                    SimpleSpecialType.POISON: "全ての敵に継続ダメージ",
+                }
+                
+                description = detailed_descriptions.get(selected_type, base_description)
+                
+            except Exception as e:
+                logger.warning(f"Error getting special puyo info for {selected_type}: {e}")
+                name = f"{selected_type.value}ぷよ"
+                description = "特殊効果"
             
             return Reward(
                 reward_type=RewardType.SPECIAL_PUYO,
                 value=selected_type,
-                name=info["name"],
-                description=f"{info['desc']} (出現率+5%)",
+                name=name,
+                description=f"{description}\n(出現率+5%)",
                 rarity=ItemRarity.RARE
             )
         
@@ -527,35 +541,36 @@ class RewardSelectionHandler:
             # 特殊ぷよアイコン（SimpleSpecialType対応）
             from core.simple_special_puyo import SimpleSpecialType
             
-            # タイプに応じたアイコン選択
+            # タイプに応じたアイコンと色を選択
             icon_map = {
-                SimpleSpecialType.HEAL: "♥",
-                SimpleSpecialType.BOMB: "💣",
+                SimpleSpecialType.HEAL: ("H", Colors.GREEN),
+                SimpleSpecialType.BOMB: ("B", Colors.RED),
+                SimpleSpecialType.LIGHTNING: ("L", Colors.YELLOW),
+                SimpleSpecialType.SHIELD: ("S", Colors.BLUE),
+                SimpleSpecialType.MULTIPLIER: ("M", Colors.PURPLE),
+                SimpleSpecialType.POISON: ("P", Colors.GREEN),
             }
             
-            icon_char = icon_map.get(reward.value, "⭐")
-            color = Colors.GREEN if reward.value == SimpleSpecialType.HEAL else Colors.RED
+            icon_char, color = icon_map.get(reward.value, ("*", Colors.WHITE))
             
+            # アイコン描画
+            icon_text = font_medium.render(icon_char, True, color)
+            icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
+            surface.blit(icon_text, icon_rect)
+            
+            # 特殊ぷよの表示名を取得
             try:
-                icon_text = font_medium.render(icon_char, True, color)
-                icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
-                surface.blit(icon_text, icon_rect)
-            except:
-                # Unicodeエラーの場合は代替アイコン
-                icon_text = font_medium.render("*", True, color)
-                icon_rect = icon_text.get_rect(center=(card_rect.centerx, icon_y + 20))
-                surface.blit(icon_text, icon_rect)
+                display_name = reward.value.get_display_name()
+                # 「ぷよ」を削除してコンパクトに表示
+                if display_name.endswith("ぷよ"):
+                    display_name = display_name[:-2]
+            except Exception:
+                display_name = reward.value.value.upper()
             
-            # 特殊ぷよ名（日本語対応）
-            type_names = {
-                SimpleSpecialType.HEAL: "HEAL",
-                SimpleSpecialType.BOMB: "BOMB",
-            }
-            
-            type_name = type_names.get(reward.value, "SPECIAL")
-            value_text = font_small.render(type_name, True, color)
-            value_rect = value_text.get_rect(center=(card_rect.centerx, icon_y + 60))
-            surface.blit(value_text, value_rect)
+            # 名前を描画
+            name_text = font_small.render(display_name, True, color)
+            name_rect = name_text.get_rect(center=(card_rect.centerx, icon_y + 60))
+            surface.blit(name_text, name_rect)
         
         elif reward.reward_type == RewardType.CHAIN_UPGRADE:
             # 連鎖アイコン

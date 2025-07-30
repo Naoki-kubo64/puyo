@@ -7,20 +7,15 @@ import pygame
 from typing import Dict
 from core.state_handler import StateHandler
 from core.constants import GameState, Colors
-from core.game_engine import GameEngine
+from core.game_engine import GameEngine, get_appropriate_font
 
 class GameOverHandler(StateHandler):
     def __init__(self, engine: GameEngine, death_cause: str = "戦闘で力尽きた"):
         super().__init__(engine)
         self.death_cause = death_cause
-        # フォント初期化（初期化されていない場合）
-        if not pygame.font.get_init():
-            pygame.font.init()
-            
-        self.font_large = pygame.font.Font(None, 72)
-        self.font_medium = pygame.font.Font(None, 48)
-        self.font_small = pygame.font.Font(None, 32)
-        self.font_tiny = pygame.font.Font(None, 24)
+        
+        # エンジンのフォントシステムを使用
+        self.fonts = engine.fonts
         
         self.stats = self._collect_final_stats()
         self.button_rects = {}
@@ -168,26 +163,29 @@ class GameOverHandler(StateHandler):
     
     def _render_title(self, screen: pygame.Surface):
         """ゲームオーバータイトル"""
-        title_text = self.font_large.render("GAME OVER", True, Colors.RED)
+        title_font = get_appropriate_font(self.fonts, "GAME OVER", 'title')
+        title_text = title_font.render("GAME OVER", True, Colors.RED)
         title_rect = title_text.get_rect(center=(screen.get_width() // 2, 80))
         screen.blit(title_text, title_rect)
         
         # 影効果
-        shadow_text = self.font_large.render("GAME OVER", True, Colors.DARK_RED)
+        shadow_text = title_font.render("GAME OVER", True, Colors.DARK_RED)
         shadow_rect = shadow_text.get_rect(center=(screen.get_width() // 2 + 3, 83))
         screen.blit(shadow_text, shadow_rect)
         screen.blit(title_text, title_rect)  # 再描画で前面に
     
     def _render_death_cause(self, screen: pygame.Surface):
         """死因の表示"""
-        cause_text = self.font_medium.render(self.death_cause, True, Colors.WHITE)
+        cause_font = get_appropriate_font(self.fonts, self.death_cause, 'medium')
+        cause_text = cause_font.render(self.death_cause, True, Colors.WHITE)
         cause_rect = cause_text.get_rect(center=(screen.get_width() // 2, 140))
         screen.blit(cause_text, cause_rect)
     
     def _render_statistics(self, screen: pygame.Surface):
         """統計情報の表示"""
         # 統計セクションタイトル
-        stats_title = self.font_medium.render("冒険の記録", True, Colors.GOLD)
+        stats_title_font = get_appropriate_font(self.fonts, "冒険の記録", 'medium')
+        stats_title = stats_title_font.render("冒険の記録", True, Colors.GOLD)
         stats_title_rect = stats_title.get_rect(center=(screen.get_width() // 2, 200))
         screen.blit(stats_title, stats_title_rect)
         
@@ -207,12 +205,14 @@ class GameOverHandler(StateHandler):
         
         for stat_name, stat_value in stats:
             # 統計名
-            name_text = self.font_small.render(f"{stat_name}:", True, Colors.LIGHT_GRAY)
+            name_font = get_appropriate_font(self.fonts, f"{stat_name}:", 'small')
+            name_text = name_font.render(f"{stat_name}:", True, Colors.LIGHT_GRAY)
             name_rect = name_text.get_rect(centerx=center_x - 50, y=y_offset)
             screen.blit(name_text, name_rect)
             
             # 統計値
-            value_text = self.font_small.render(stat_value, True, Colors.WHITE)
+            value_font = get_appropriate_font(self.fonts, stat_value, 'small')
+            value_text = value_font.render(stat_value, True, Colors.WHITE)
             value_rect = value_text.get_rect(centerx=center_x + 50, y=y_offset)
             screen.blit(value_text, value_rect)
             
@@ -253,7 +253,8 @@ class GameOverHandler(StateHandler):
             pygame.draw.rect(screen, Colors.WHITE, button_rect, 2)
             
             # ボタンテキスト
-            text_surface = self.font_small.render(button_text, True, text_color)
+            button_font = get_appropriate_font(self.fonts, button_text, 'small')
+            text_surface = button_font.render(button_text, True, text_color)
             text_rect = text_surface.get_rect(center=button_rect.center)
             screen.blit(text_surface, text_rect)
     
@@ -267,7 +268,8 @@ class GameOverHandler(StateHandler):
         
         y_offset = screen.get_height() - 50
         for control in controls:
-            control_text = self.font_tiny.render(control, True, Colors.LIGHT_GRAY)
+            control_font = get_appropriate_font(self.fonts, control, 'small')
+            control_text = control_font.render(control, True, Colors.LIGHT_GRAY)
             control_rect = control_text.get_rect(center=(screen.get_width() // 2, y_offset))
             screen.blit(control_text, control_rect)
             y_offset += 20

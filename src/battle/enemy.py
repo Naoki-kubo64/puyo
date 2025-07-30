@@ -773,12 +773,33 @@ class EnemyGroup:
     
     def select_target_by_click(self, click_x: int, click_y: int, enemy_positions: List[tuple]) -> bool:
         """クリック位置で敵をターゲット選択"""
-        for i, (x, y, width, height) in enumerate(enemy_positions):
-            if x <= click_x <= x + width and y <= click_y <= y + height:
-                if i < len(self.alive_enemies):
-                    self.selected_target_index = i
-                    logger.info(f"Target selected by click: {self.alive_enemies[i].get_display_name()}")
-                    return True
+        try:
+            # 生存敵のリストを最新化
+            self.alive_enemies = [e for e in self.enemies if e.is_alive]
+            
+            # 位置とインデックスの整合性をチェック
+            if len(enemy_positions) != len(self.alive_enemies):
+                logger.warning(f"Position count mismatch: {len(enemy_positions)} positions vs {len(self.alive_enemies)} enemies")
+                return False
+            
+            for i, (x, y, width, height) in enumerate(enemy_positions):
+                if x <= click_x <= x + width and y <= click_y <= y + height:
+                    if 0 <= i < len(self.alive_enemies):
+                        self.selected_target_index = i
+                        selected_enemy = self.alive_enemies[i]
+                        if selected_enemy and hasattr(selected_enemy, 'get_display_name'):
+                            logger.info(f"Target selected by click: {selected_enemy.get_display_name()}")
+                        else:
+                            logger.info(f"Target selected by click: Enemy {i}")
+                        return True
+                    else:
+                        logger.warning(f"Invalid enemy index: {i} (alive enemies: {len(self.alive_enemies)})")
+                        
+        except Exception as e:
+            logger.error(f"Error in select_target_by_click: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
         return False
     
     def is_all_defeated(self) -> bool:

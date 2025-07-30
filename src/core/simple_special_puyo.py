@@ -21,6 +21,38 @@ class SimpleSpecialType(Enum):
     SHIELD = "shield"          # 盾ぷよ：ダメージバリア
     MULTIPLIER = "multiplier"  # 倍率ぷよ：連鎖ダメージ倍率アップ
     POISON = "poison"          # 毒ぷよ：敵に継続ダメージ
+    
+    def get_display_name(self) -> str:
+        """特殊ぷよの固有表示名を取得"""
+        try:
+            names = {
+                SimpleSpecialType.HEAL: "ヒールぷよ",
+                SimpleSpecialType.BOMB: "ボムぷよ", 
+                SimpleSpecialType.LIGHTNING: "サンダーぷよ",
+                SimpleSpecialType.SHIELD: "シールドぷよ",
+                SimpleSpecialType.MULTIPLIER: "パワーぷよ",
+                SimpleSpecialType.POISON: "ポイズンぷよ"
+            }
+            return names.get(self, f"{self.value}ぷよ")
+        except Exception as e:
+            logger.warning(f"Error getting display name for {self}: {e}")
+            return "特殊ぷよ"
+    
+    def get_description(self) -> str:
+        """特殊ぷよの効果説明を取得"""
+        try:
+            descriptions = {
+                SimpleSpecialType.HEAL: "プレイヤーのHPを10回復",
+                SimpleSpecialType.BOMB: "全ての敵に攻撃",
+                SimpleSpecialType.LIGHTNING: "最強の敵1体に強力攻撃", 
+                SimpleSpecialType.SHIELD: "ダメージを15軽減",
+                SimpleSpecialType.MULTIPLIER: "攻撃力を50%上昇",
+                SimpleSpecialType.POISON: "全ての敵に継続ダメージ"
+            }
+            return descriptions.get(self, "特殊効果")
+        except Exception as e:
+            logger.warning(f"Error getting description for {self}: {e}")
+            return "特殊効果"
 
 
 class SimpleSpecialPuyo:

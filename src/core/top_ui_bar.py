@@ -6,9 +6,12 @@ Slay the Spireスタイルの美しい上部UI表示
 import pygame
 import math
 import os
+import logging
 from typing import Dict, Optional
 from .constants import Colors, SCREEN_WIDTH, FONT_SIZE_SMALL, FONT_SIZE_MEDIUM
 from .game_engine import get_appropriate_font
+
+logger = logging.getLogger(__name__)
 
 class TopUIBar:
     """上部UIバーの描画と管理を担当するクラス"""
@@ -22,7 +25,8 @@ class TopUIBar:
         # UI要素の位置
         self.hp_icon_pos = (20, 15)
         self.gold_icon_pos = (380, 15)
-        self.special_puyo_pos = (560, 15)  # 特殊ぷよ表示位置
+        self.potion_pos = (530, 15)  # ポーション表示位置
+        self.special_puyo_pos = (700, 15)  # 特殊ぷよ表示位置（右にずらす）
         self.floor_icon_pos = (SCREEN_WIDTH - 120, 15)
         
         # アニメーション用
@@ -94,7 +98,7 @@ class TopUIBar:
         self.damage_flash = 1.0
     
     def draw_top_bar(self, surface: pygame.Surface, player_hp: int, player_max_hp: int, 
-                     gold: int, floor: int, special_puyo_rates: dict = None):
+                     gold: int, floor: int, special_puyo_rates: dict = None, player_inventory=None):
         """上部UIバーを描画"""
         # 背景バー
         self._draw_background_bar(surface)
@@ -107,6 +111,10 @@ class TopUIBar:
         
         # ゴールド表示
         self._draw_gold_display(surface, gold)
+        
+        # ポーション表示
+        if player_inventory:
+            self._draw_potion_display(surface, player_inventory)
         
         # 特殊ぷよ表示
         if special_puyo_rates:
@@ -368,27 +376,95 @@ class TopUIBar:
             no_special_surface = no_special_font.render("なし", True, Colors.GRAY)
             surface.blit(no_special_surface, (current_x, y + 20))
     
+    def _draw_potion_display(self, surface: pygame.Surface, player_inventory):
+        """ポーション表示を描画"""
+        x, y = self.potion_pos
+        
+        # "Potions" ラベル
+        label_font = get_appropriate_font(self.fonts, "Potions", 'small')
+        label_surface = label_font.render("Potions", True, Colors.LIGHT_GRAY)
+        surface.blit(label_surface, (x, y - 5))
+        
+        # ポーションを取得
+        from inventory.player_inventory import ItemType
+        potions = player_inventory.get_items_by_type(ItemType.POTION)
+        
+        # ポーションアイコンを横に並べて表示
+        icon_spacing = 35
+        current_x = x
+        
+        if potions:
+            for i, potion in enumerate(potions[:4]):  # 最大4個まで表示
+                if i >= 4:  # 4個以上は省略
+                    break
+                
+                # ポーションアイコン（簡単な円で表現）
+                potion_rect = pygame.Rect(current_x, y + 12, 24, 24)
+                
+                # レアリティに応じた色
+                potion_color = potion.rarity.color if hasattr(potion.rarity, 'color') else Colors.GREEN
+                pygame.draw.circle(surface, potion_color, potion_rect.center, 12)
+                pygame.draw.circle(surface, Colors.WHITE, potion_rect.center, 12, 2)
+                
+                # 数量表示
+                if potion.quantity > 1:
+                    qty_font = get_appropriate_font(self.fonts, str(potion.quantity), 'small')
+                    qty_surface = qty_font.render(str(potion.quantity), True, Colors.WHITE)
+                    surface.blit(qty_surface, (current_x + 18, y + 30))
+                
+                # クリック判定エリアを記録
+                potion_click_rect = pygame.Rect(current_x - 5, y + 10, 30, 30)
+                if hasattr(self, 'potion_click_areas'):
+                    self.potion_click_areas.append((potion_click_rect, potion.id))
+                else:
+                    self.potion_click_areas = [(potion_click_rect, potion.id)]
+                
+                # マウスオーバー検出
+                mouse_pos = pygame.mouse.get_pos()
+                if potion_click_rect.collidepoint(mouse_pos):
+                    self.hover_info = {
+                        'type': 'potion',
+                        'item': potion,
+                        'pos': (mouse_pos[0] + 10, mouse_pos[1] - 40)
+                    }
+                
+                current_x += icon_spacing
+        else:
+            # ポーションがない場合
+            no_potion_font = get_appropriate_font(self.fonts, "なし", 'small')
+            no_potion_surface = no_potion_font.render("なし", True, Colors.GRAY)
+            surface.blit(no_potion_surface, (current_x, y + 20))
+    
     def _draw_hover_tooltip(self, surface: pygame.Surface):
         """マウスオーバー時のツールチップを描画"""
         if not self.hover_info:
             return
         
-        puyo_type = self.hover_info['type']
-        rate = self.hover_info['rate']
+        hover_type = self.hover_info['type']
         pos = self.hover_info['pos']
         
-        # 特殊ぷよの効果説明
-        effects = {
-            'heal': 'HP回復: プレイヤーのHPを10回復',
-            'bomb': '爆弾: 全ての敵に攻撃',
-            'lightning': '雷: 最強の敵1体に強力攻撃',
-            'shield': 'シールド: ダメージを15軽減',
-            'multiplier': '倍率: 攻撃力を50%上昇',
-            'poison': '毒: 全ての敵に継続ダメージ'
-        }
-        
-        effect_text = effects.get(puyo_type, '特殊効果')
-        rate_text = f'出現率: {rate*100:.0f}%'
+        if hover_type == 'potion':
+            # ポーション情報
+            potion = self.hover_info['item']
+            effect_text = potion.description
+            rate_text = f'クリックで使用 (x{potion.quantity})'
+        else:
+            # 特殊ぷよ情報
+            puyo_type = hover_type
+            rate = self.hover_info['rate']
+            
+            # 特殊ぷよの固有名前と効果説明
+            effects = {
+                'heal': 'ヒールぷよ: プレイヤーのHPを10回復',
+                'bomb': 'ボムぷよ: 全ての敵に攻撃',
+                'lightning': 'サンダーぷよ: 最強の敵1体に強力攻撃',
+                'shield': 'シールドぷよ: ダメージを15軽減', 
+                'multiplier': 'パワーぷよ: 攻撃力を50%上昇',
+                'poison': 'ポイズンぷよ: 全ての敵に継続ダメージ'
+            }
+            
+            effect_text = effects.get(puyo_type, '特殊効果')
+            rate_text = f'出現率: {rate*100:.0f}%'
         
         # ツールチップの背景サイズを計算
         font = get_appropriate_font(self.fonts, effect_text, 'small')
@@ -410,5 +486,40 @@ class TopUIBar:
     def handle_mouse_motion(self, mouse_pos: tuple):
         """マウス移動イベント処理"""
         self.last_mouse_pos = mouse_pos
-        # hover_infoは_draw_special_puyo_displayで更新される
+        # hover_infoは_draw_special_puyo_displayや_draw_potion_displayで更新される
         self.hover_info = None
+        # ポーションクリックエリアもクリア
+        if hasattr(self, 'potion_click_areas'):
+            self.potion_click_areas = []
+    
+    def handle_potion_click(self, mouse_pos: tuple, player_inventory, player_data):
+        """ポーションクリック処理"""
+        if not hasattr(self, 'potion_click_areas'):
+            return False
+        
+        for click_rect, potion_id in self.potion_click_areas:
+            if click_rect.collidepoint(mouse_pos):
+                # ポーションを使用
+                used_potion = player_inventory.use_consumable(potion_id)
+                if used_potion:
+                    self._apply_potion_effect(used_potion, player_data)
+                    return True
+        return False
+    
+    def _apply_potion_effect(self, potion, player_data):
+        """ポーション効果を適用"""
+        try:
+            if "health" in potion.id:
+                # HP回復ポーション
+                heal_amount = potion.effect_value
+                player_data.heal(heal_amount)
+                logger.info(f"Used {potion.name}: Healed {heal_amount} HP")
+            elif "strength" in potion.id:
+                # 攻撃力強化ポーション
+                bonus = potion.effect_value / 100.0  # %を小数に変換
+                player_data.chain_damage_multiplier += bonus
+                logger.info(f"Used {potion.name}: Damage +{potion.effect_value}%")
+            else:
+                logger.info(f"Used {potion.name}: {potion.description}")
+        except Exception as e:
+            logger.error(f"Error applying potion effect: {e}")

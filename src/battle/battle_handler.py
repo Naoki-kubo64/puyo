@@ -683,6 +683,10 @@ class BattleHandler:
         
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1 and self.battle_active:  # 左クリック
+                # ポーションクリック処理
+                if self.top_ui_bar.handle_potion_click(event.pos, self.player.inventory, self.player):
+                    return
+                
                 # 敵選択
                 enemy_positions = self._get_all_enemy_positions()
                 if self.enemy_group.select_target_by_click(event.pos[0], event.pos[1], enemy_positions):
@@ -704,7 +708,7 @@ class BattleHandler:
                 logger.info("Debug: Kill command activated - defeating all enemies")
                 for enemy in self.enemy_group.enemies:
                     enemy.current_hp = 0
-                self._check_battle_end()
+                self._check_battle_result()
                 return
             
             elif event.key == pygame.K_RETURN and not self.battle_active:
@@ -825,7 +829,8 @@ class BattleHandler:
             self.player.hp, self.player.max_hp,
             self.player.gold,   # ゴールド
             self.floor_level,
-            special_puyo_rates  # 特殊ぷよ出現率
+            special_puyo_rates,  # 特殊ぷよ出現率
+            self.player.inventory  # プレイヤーインベントリ
         )
         
         # ぷよぷよフィールド描画（背景の上に）
