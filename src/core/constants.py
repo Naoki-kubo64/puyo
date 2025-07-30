@@ -108,10 +108,10 @@ ENEMY_ATTACK_INTERVAL = 6.0  # 秒（初心者に優しい間隔、後で短縮�
 DAMAGE_PER_PUYO = 10
 CHAIN_DAMAGE_MULTIPLIER = 1.2
 
-# ダンジョン進行システム
-FLOOR_SCALING_HP = 1.25     # フロアごとの敵HP倍率（より緩やか）
-FLOOR_SCALING_DAMAGE = 1.15 # フロアごりの敵攻撃力倍率（より緩やか）
-FLOOR_SCALING_SPEED = 0.92  # フロアごとの敵攻撃間隔倍率（短縮をより緩やか）
+# ダンジョン進行システム（バランス調整済み）
+FLOOR_SCALING_HP = 1.15     # フロアごとの敵HP倍率（より緩やかに調整）
+FLOOR_SCALING_DAMAGE = 1.10 # フロアごりの敵攻撃力倍率（より緩やかに調整）
+FLOOR_SCALING_SPEED = 0.95  # フロアごとの敵攻撃間隔倍率（短縮をより緩やかに調整）
 
 # ============================================================================
 # カードシステム関連
