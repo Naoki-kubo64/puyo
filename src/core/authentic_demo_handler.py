@@ -863,6 +863,9 @@ class AuthenticDemoHandler:
         # UI位置（NEXTエリアの下から開始）
         self.ui_start_x = GRID_WIDTH * PUYO_SIZE + GRID_OFFSET_X + 30
         
+        # 初期ぷよペアを生成
+        self._spawn_new_pair()
+        
         logger.info("Authentic demo handler initialized")
     
     def _generate_initial_next_queue(self):
