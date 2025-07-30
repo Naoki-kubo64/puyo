@@ -22,29 +22,39 @@ class PuyoPair:
     """本格的なぷよペア（2個1組）"""
     
     def __init__(self, main_type: PuyoType, sub_type: PuyoType, center_x: int, main_special=None, sub_special=None, parent_handler=None):
+        logger.debug(f"=== CREATING PUYO PAIR ===")
+        logger.debug(f"Input parameters: main_type={main_type.name}, sub_type={sub_type.name}, center_x={center_x}")
+        logger.debug(f"Special parameters: main_special={main_special}, sub_special={sub_special}")
+        
         # ぷよタイプ
         self.main_type = main_type  # 軸ぷよ（中心）
         self.sub_type = sub_type    # 子ぷよ（回転する）
+        logger.debug(f"Set puyo types: main={self.main_type.name}, sub={self.sub_type.name}")
         
         # 特殊ぷよ情報（引数が指定されていればそれを使用、なければランダム生成）
         self.main_special = main_special if main_special is not None else self._determine_special_type()
         self.sub_special = sub_special if sub_special is not None else self._determine_special_type()
+        logger.debug(f"Special puyo determination: main_special={self.main_special}, sub_special={self.sub_special}")
         
         # 親ハンドラー参照
         self.parent_handler = parent_handler
+        logger.debug(f"Parent handler set: {parent_handler is not None}")
         
         # 位置（浮動小数点で滑らかな移動）
         self.center_x = float(center_x)  # 軸ぷよのX座標
         self.center_y = -1.0             # 軸ぷよのY座標
+        logger.debug(f"Initial position set: ({self.center_x}, {self.center_y})")
         
         # 回転状態（0=上, 1=右, 2=下, 3=左）
         self.rotation = 0
+        logger.debug(f"Initial rotation: {self.rotation}")
         
         # 動作状態（本家風タイミング）
         self.active = True
         self.fall_speed = 0.4  # セル/秒（本家の通常落下速度）
         self.fast_falling = False
         self.fast_fall_speed = 15.0  # 本家風高速落下（高速）
+        logger.debug(f"Movement settings: active={self.active}, fall_speed={self.fall_speed}, fast_falling={self.fast_falling}")
         
         # 分離状態（片方が着地した場合）
         self.main_fixed = False  # 軸ぷよが固定されたか
@@ -66,6 +76,13 @@ class PuyoPair:
         self.post_separation_control_time = 0.2  # 分離後操作可能時間（0.2秒）
         self.post_separation_timer = 0.0  # 分離後タイマー
         self.remaining_puyo_pos = None  # 残りのぷよの位置（分離後制御用）
+        
+        logger.debug(f"Separation and timing settings initialized:")
+        logger.debug(f"  grounded_grace_time={self.grounded_grace_time}, max_move_resets={self.max_move_resets}")
+        logger.debug(f"  auto_lock_time={self.auto_lock_time}, post_separation_control_time={self.post_separation_control_time}")
+        logger.debug(f"=== PUYO PAIR CREATION COMPLETE ===")
+        logger.debug(f"Final pair state: main={self.main_type.name}({self.main_special}), sub={self.sub_type.name}({self.sub_special})")
+        logger.debug(f"Position: ({self.center_x}, {self.center_y}), rotation={self.rotation}, active={self.active}")
     
     def get_positions(self) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         """現在の軸ぷよと子ぷよの位置を取得"""
@@ -940,6 +957,7 @@ class AuthenticDemoHandler:
         
         # 常に最初のペアをスポーン（カウントダウン中でも回転できるように）
         logger.info("Game reset - spawning initial pair for immediate control")
+        logger.debug("=== INITIAL GAME SPAWN TRIGGERED BY RESET ===")
         self._spawn_new_pair()
     
     def update(self, dt: float):
@@ -1008,8 +1026,13 @@ class AuthenticDemoHandler:
         # 新しいペアスポーン（連鎖アニメーション中は停止）
         if (self.current_pair is None and self.spawn_timer >= self.spawn_interval and 
             not self.puyo_grid.chain_animation_active):
+            logger.debug(f"Spawning conditions met - triggering new pair spawn")
+            logger.debug(f"  current_pair is None: {self.current_pair is None}")
+            logger.debug(f"  spawn_timer >= spawn_interval: {self.spawn_timer} >= {self.spawn_interval}")
+            logger.debug(f"  chain_animation_active: {self.puyo_grid.chain_animation_active}")
             self._spawn_new_pair()
             self.spawn_timer = 0.0
+            logger.debug(f"Spawn timer reset to 0.0")
         
         # ゲームオーバー判定
         if self.puyo_grid.is_game_over():
@@ -1070,18 +1093,37 @@ class AuthenticDemoHandler:
     
     def _spawn_new_pair(self):
         """新しいぷよペアをスポーン"""
+        logger.info("=== SPAWNING NEW PUYO PAIR ===")
+        
         # 中央からスポーン
         center_x = GRID_WIDTH // 2
+        logger.debug(f"Spawn position: center_x={center_x}")
         
         # NEXTから色と特殊ぷよ情報を取得
+        logger.debug("Getting next pair info with specials...")
         next_pair_info = self._get_next_pair_with_specials()
         main_type, sub_type, main_special, sub_special = next_pair_info
+        logger.debug(f"Next pair info: main_type={main_type.name}, sub_type={sub_type.name}")
+        logger.debug(f"Special puyo info: main_special={main_special}, sub_special={sub_special}")
         
         # ペア作成
+        logger.debug("Creating new PuyoPair instance...")
         new_pair = PuyoPair(main_type, sub_type, center_x, main_special, sub_special, self)
+        logger.debug(f"PuyoPair created - Initial state:")
+        logger.debug(f"  Position: ({new_pair.center_x}, {new_pair.center_y})")
+        logger.debug(f"  Rotation: {new_pair.rotation}")
+        logger.debug(f"  Active: {new_pair.active}")
+        logger.debug(f"  Fall speed: {new_pair.fall_speed}")
+        logger.debug(f"  Fast falling: {new_pair.fast_falling}")
+        logger.debug(f"  Main type: {new_pair.main_type.name}")
+        logger.debug(f"  Sub type: {new_pair.sub_type.name}")
+        logger.debug(f"  Main special: {new_pair.main_special}")
+        logger.debug(f"  Sub special: {new_pair.sub_special}")
         
         # 本家風配置可能性チェック
+        logger.debug("Checking if pair can be spawned at authentic position...")
         if self._can_spawn_authentic_pair(new_pair):
+            logger.info("✓ Spawn position is valid - activating new pair")
             self.current_pair = new_pair
             special_info = ""
             if main_special or sub_special:
@@ -1090,13 +1132,20 @@ class AuthenticDemoHandler:
             logger.debug(f"New pair special info - main: {main_special}, sub: {sub_special}")
             logger.debug(f"PuyoPair created with special types: main_special={new_pair.main_special}, sub_special={new_pair.sub_special}")
             
+            # 初期位置の詳細ログ
+            main_pos, sub_pos = new_pair.get_positions()
+            logger.debug(f"Initial positions - Main: {main_pos}, Sub: {sub_pos}")
+            
             # スポーン直後にキー状態をチェック（Sキー継続対応）
             keys = pygame.key.get_pressed()
             if keys[pygame.K_s]:
                 self.current_pair.set_fast_fall(True)
                 logger.debug("Fast fall applied to new pair immediately")
+            
+            logger.info("=== PAIR SPAWN COMPLETE ===")
         else:
             # 本家風ゲームオーバー
+            logger.warning("✗ Cannot spawn pair at authentic position - GAME OVER")
             self.game_active = False
             logger.info("Authentic Game Over - Cannot spawn new pair at authentic spawn position")
     
@@ -1250,27 +1299,39 @@ class AuthenticDemoHandler:
             elif event.key == pygame.K_c:
                 self._execute_chain_check()
             
-            # 本家風ペア操作（回転は常に許可、移動は条件付き）
-            elif self.current_pair and self.current_pair.active:
-                if event.key == pygame.K_SPACE:
-                    # 時計回り回転（カウントダウン中や連鎖中でも許可）
-                    logger.debug(f"SPACE pressed - attempting clockwise rotation (current: {self.current_pair.rotation})")
-                    if self.current_pair.try_rotate(True, self.puyo_grid):
-                        logger.debug(f"SUCCESS: Pair rotated clockwise to {self.current_pair.rotation}")
+            # スペースキー回転処理（最優先で処理）
+            elif event.key == pygame.K_SPACE:
+                print(f"🔄 SPACE KEY PRESSED! current_pair exists: {self.current_pair is not None}")
+                if self.current_pair:
+                    print(f"🔄 Pair details - active: {self.current_pair.active}, rotation: {self.current_pair.rotation}")
+                    print(f"🔄 Pair position - center_x: {self.current_pair.center_x}, center_y: {self.current_pair.center_y}")
+                    print(f"🔄 Game state - countdown: {self.countdown_active}, chain_active: {self.puyo_grid.chain_animation_active}")
+                    
+                    if self.current_pair.active:
+                        # 時計回り回転（カウントダウン中や連鎖中でも許可）
+                        print(f"🔄 ATTEMPTING ROTATION - current rotation: {self.current_pair.rotation}")
+                        logger.info(f"SPACE pressed - attempting clockwise rotation (current: {self.current_pair.rotation})")
+                        if self.current_pair.try_rotate(True, self.puyo_grid):
+                            print(f"✅ ROTATION SUCCESS! New rotation: {self.current_pair.rotation}")
+                            logger.info(f"SUCCESS: Pair rotated clockwise to {self.current_pair.rotation}")
+                        else:
+                            print(f"❌ ROTATION FAILED! Position: ({self.current_pair.center_x}, {self.current_pair.center_y})")
+                            logger.warning(f"FAILED: Clockwise rotation blocked (position: {self.current_pair.center_x}, {self.current_pair.center_y})")
                     else:
-                        logger.warning(f"FAILED: Clockwise rotation blocked (position: {self.current_pair.center_x}, {self.current_pair.center_y})")
-                
-                elif event.key == pygame.K_w:
-                    # 反時計回り回転（カウントダウン中や連鎖中でも許可）
-                    logger.debug(f"W pressed - attempting counter-clockwise rotation (current: {self.current_pair.rotation})")
-                    if self.current_pair.try_rotate(False, self.puyo_grid):
-                        logger.debug(f"SUCCESS: Pair rotated counter-clockwise to {self.current_pair.rotation}")
-                    else:
-                        logger.warning(f"FAILED: Counter-clockwise rotation blocked (position: {self.current_pair.center_x}, {self.current_pair.center_y})")
+                        print(f"❌ PAIR NOT ACTIVE! current_pair.active = {self.current_pair.active}")
+                elif self.current_pair is None:
+                    print(f"🆕 NO PAIR EXISTS - SPAWNING NEW PAIR")
+                    # 落下中でない場合は手動スポーン
+                    self._spawn_new_pair()
             
-            # 落下中でない場合は手動スポーン
-            elif event.key == pygame.K_SPACE and self.current_pair is None:
-                self._spawn_new_pair()
+            # Wキー反時計回り回転処理
+            elif event.key == pygame.K_w and self.current_pair and self.current_pair.active:
+                # 反時計回り回転（カウントダウン中や連鎖中でも許可）
+                logger.debug(f"W pressed - attempting counter-clockwise rotation (current: {self.current_pair.rotation})")
+                if self.current_pair.try_rotate(False, self.puyo_grid):
+                    logger.debug(f"SUCCESS: Pair rotated counter-clockwise to {self.current_pair.rotation}")
+                else:
+                    logger.warning(f"FAILED: Counter-clockwise rotation blocked (position: {self.current_pair.center_x}, {self.current_pair.center_y})")
         
 # KEYUPでのSキー処理は不要（継続的入力で処理）
         
