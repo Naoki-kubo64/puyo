@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 import sys
 import os
-sys.path.insert(0, 'src')
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 import pygame
 pygame.init()
 
-from src.rewards.reward_system import RewardGenerator, RewardType, Reward
-from src.special_puyo.special_puyo import SpecialPuyoType
+from rewards.reward_system import RewardGenerator, RewardType, Reward
 
 print('=== REWARD SYSTEM TEST ===')
 
@@ -22,7 +21,7 @@ def test_reward_generation():
     for i, reward in enumerate(rewards):
         print(f"  {i+1}. {reward.name} ({reward.reward_type.value})")
         print(f"     {reward.description}")
-        if reward.reward_type == RewardType.SPECIAL_PUYO_UNLOCK:
+        if reward.reward_type == RewardType.SPECIAL_PUYO:
             print(f"     Special Puyo: {reward.value}")
     
     print("\nFloor 5 Boss Battle:")
@@ -36,13 +35,18 @@ def test_special_puyo_rewards():
     
     generator = RewardGenerator()
     
-    # 特殊ぷよ報酬を強制生成
-    special_reward = generator._generate_specific_reward(RewardType.SPECIAL_PUYO_UNLOCK, 3)
-    if special_reward:
-        print(f"Special Puyo Reward: {special_reward.name}")
-        print(f"Description: {special_reward.description}")
-        print(f"Rarity: {special_reward.rarity.name}")
-        print(f"Value: {special_reward.value}")
+    # 通常の報酬生成で特殊ぷよ報酬をテスト
+    rewards = generator.generate_battle_rewards(floor_level=3, enemy_type="boss", is_boss=True)
+    special_rewards = [r for r in rewards if r.reward_type == RewardType.SPECIAL_PUYO]
+    
+    if special_rewards:
+        for reward in special_rewards:
+            print(f"Special Puyo Reward: {reward.name}")
+            print(f"Description: {reward.description}")
+            print(f"Rarity: {reward.rarity.name}")
+            print(f"Value: {reward.value}")
+    else:
+        print("No special puyo rewards generated in this test")
 
 def test_reward_colors():
     print('\n--- Reward Color Test ---')
@@ -50,7 +54,7 @@ def test_reward_colors():
     test_rewards = [
         Reward(RewardType.GOLD, 100, "ゴールド", "通貨"),
         Reward(RewardType.HP_UPGRADE, 10, "HP強化", "体力増加"),
-        Reward(RewardType.SPECIAL_PUYO_UNLOCK, SpecialPuyoType.BUFF.value, "バフぷよ解放", "攻撃力アップ"),
+        Reward(RewardType.SPECIAL_PUYO, "buff", "バフぷよ解放", "攻撃力アップ"),
     ]
     
     for reward in test_rewards:

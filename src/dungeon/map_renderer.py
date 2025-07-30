@@ -102,8 +102,8 @@ class MapRenderer:
         """ノードタイプ別の画像を読み込み"""
         images = {}
         
-        # プロジェクトルートディレクトリを取得
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        # assetsディレクトリを取得
+        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'assets')
         
         # 画像ファイルのマッピング
         image_files = {
@@ -119,7 +119,7 @@ class MapRenderer:
         # 各画像を読み込み
         for node_type, filename in image_files.items():
             try:
-                image_path = os.path.join(project_root, filename)
+                image_path = os.path.join(assets_dir, filename)
                 if os.path.exists(image_path):
                     original_image = pygame.image.load(image_path)
                     # ノードサイズに合わせてスケール（通常ノードは96x96、大きいノードは128x128）
@@ -151,11 +151,11 @@ class MapRenderer:
     def _load_status_icons(self):
         """ステータスアイコンを読み込み"""
         try:
-            # プロジェクトルートからのパス
-            base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            # assetsディレクトリからのパス
+            assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'assets')
             
             # HP.pngを読み込み
-            hp_path = os.path.join(base_path, "HP.png")
+            hp_path = os.path.join(assets_dir, "HP.png")
             if os.path.exists(hp_path):
                 self.hp_icon = pygame.image.load(hp_path).convert_alpha()
                 # サイズを調整（30x30ピクセル）
@@ -163,7 +163,7 @@ class MapRenderer:
                 logger.info("Loaded HP icon for map status")
             
             # gold.pngを読み込み
-            gold_path = os.path.join(base_path, "gold.png")
+            gold_path = os.path.join(assets_dir, "gold.png")
             if os.path.exists(gold_path):
                 self.gold_icon = pygame.image.load(gold_path).convert_alpha()
                 # サイズを調整（30x30ピクセル）
@@ -176,8 +176,8 @@ class MapRenderer:
     def _load_special_puyo_images(self):
         """特殊ぷよの画像を読み込み（SimpleSpecialTypeシステム対応）"""
         try:
-            # Pictureフォルダから特殊ぷよ画像を読み込み
-            base_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            # assetsフォルダから特殊ぷよ画像を読み込み
+            assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'assets')
             
             # SimpleSpecialTypeシステムに対応した画像マッピング（バトル画面と同じ）
             image_mapping = {
@@ -191,7 +191,7 @@ class MapRenderer:
             
             for puyo_type, filename in image_mapping.items():
                 try:
-                    image_path = os.path.join(base_path, "Picture", filename)
+                    image_path = os.path.join(assets_dir, filename)
                     if os.path.exists(image_path):
                         image = pygame.image.load(image_path).convert_alpha()
                         # ヘッダー用に小さくスケール（25x25ピクセル）
@@ -208,9 +208,9 @@ class MapRenderer:
     def _load_background_image(self) -> Optional[pygame.Surface]:
         """背景画像を読み込み"""
         try:
-            # プロジェクトルートディレクトリを取得
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            image_path = os.path.join(project_root, "map2.png")
+            # assetsディレクトリを取得
+            assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'assets')
+            image_path = os.path.join(assets_dir, "map2.png")
             
             if os.path.exists(image_path):
                 background_image = pygame.image.load(image_path)

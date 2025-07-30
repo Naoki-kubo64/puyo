@@ -15,6 +15,7 @@ from core.top_ui_bar import TopUIBar
 from .enemy import Enemy, EnemyAction, EnemyGroup, create_enemy_group, ActionType
 from .enemy_renderer import EnemyRenderer
 from .enemy_intent_renderer import EnemyIntentRenderer
+from .battle_ui_renderer import BattleUIRenderer
 from special_puyo.special_puyo import special_puyo_manager
 from rewards.reward_system import RewardGenerator, RewardSelectionHandler
 
@@ -35,7 +36,7 @@ class Player:
         
         # 視覚効果
         self.damage_flash_timer = 0.0
-        self.damage_flash_duration = 0.5
+        self.damage_flash_duration = DAMAGE_FLASH_DURATION
         
         # 特殊効果システム
         self.buffs = {}          # {buff_type: [value, duration]}
@@ -235,15 +236,15 @@ class BattleHandler:
         
         # バトル開始カウントダウンシステム
         self.countdown_active = True
-        self.countdown_timer = 3.0  # 3秒間のカウントダウン
-        self.countdown_start_time = 3.0
+        self.countdown_timer = BATTLE_COUNTDOWN_DURATION
+        self.countdown_start_time = BATTLE_COUNTDOWN_DURATION
         
         # UI位置 - 敵情報をぷよエリアの右下に配置
         # ぷよエリアの右側、ぷよエリアの下端に合わせる
         puyo_area_right = GRID_OFFSET_X + GRID_WIDTH * PUYO_SIZE + 80
         puyo_area_bottom = GRID_OFFSET_Y + GRID_HEIGHT * PUYO_SIZE
         available_width = SCREEN_WIDTH - puyo_area_right - 100  # 右端マージン
-        self.battle_ui_x = puyo_area_right + available_width // 2  # より右に配置
+        self.battle_ui_x = puyo_area_right + int(available_width * BATTLE_UI_POSITION_OFFSET_RATIO)  # より右に配置
         self.battle_ui_y = puyo_area_bottom - 150  # より下に配置
         
         # エフェクト
@@ -253,6 +254,7 @@ class BattleHandler:
         self.background_renderer = BackgroundRenderer()
         self.top_ui_bar = TopUIBar(self.engine.fonts)
         self.intent_renderer = EnemyIntentRenderer()
+        self.ui_renderer = BattleUIRenderer(self.engine.fonts, self.battle_ui_x, self.battle_ui_y)
         
         enemy_names = [e.get_display_name() for e in self.enemy_group.enemies]
         logger.info(f"Battle started: Floor {floor_level} vs {', '.join(enemy_names)}")
@@ -870,7 +872,7 @@ class BattleHandler:
             return
         
         # 敵の配置設定 - さらに大きなサイズ
-        enemy_size = 240  # スライム単体のサイズ（180から240に拡大）
+        enemy_size = ENEMY_DISPLAY_SIZE  # スライム単体のサイズ
         enemy_spacing = 30
         start_x = self.battle_ui_x
         start_y = self.battle_ui_y
@@ -1051,16 +1053,10 @@ class BattleHandler:
     
     def _render_enemies_info(self, surface: pygame.Surface):
         """敵情報を描画"""
-        font_large = self.engine.fonts['large']
-        font_medium = self.engine.fonts['medium']
-        font_small = self.engine.fonts['small']
-        
-        # デバッグ: 敵の数を確認
         logger.debug(f"Rendering {len(self.enemy_group.alive_enemies)} enemies")
         
-        # 敵の配置 - 画面右端に最適化
-        available_width = 280  # 右端エリア固定幅
-        enemy_width = 260  # 単一列表示に最適化
+        # 敵の配置設定
+        enemy_width = 260
         enemy_height = 160
         enemy_spacing = 10
         start_x = self.battle_ui_x
@@ -1070,110 +1066,22 @@ class BattleHandler:
             # 敵の表示位置 - 縦一列配置
             x = start_x
             y = start_y + i * (enemy_height + enemy_spacing)
-            
-            # 選択中の敵は枠で囲む
             is_selected = (enemy == self.enemy_group.get_selected_target())
-            # 選択時の黄色い枠を削除
             
-            # 背景
-            bg_rect = pygame.Rect(x, y, enemy_width, enemy_height)
-            pygame.draw.rect(surface, Colors.DARK_GRAY, bg_rect)
-            pygame.draw.rect(surface, Colors.WHITE, bg_rect, 1)
-            
-            # 敵ビジュアル描画（背景の上部に）
-            visual_area_height = 80
-            hp_ratio = enemy.current_hp / enemy.max_hp
-            EnemyRenderer.draw_enemy(
-                surface, enemy.enemy_type, 
-                x + 10, y + 5, enemy_width - 20, visual_area_height,
-                hp_ratio, is_selected
+            # 敵情報パネルを描画
+            self.ui_renderer.render_enemy_info_panel(
+                surface, enemy, x, y, enemy_width, enemy_height, is_selected
             )
             
-            # 敵名（ビジュアルの下に）
-            enemy_name = enemy.get_display_name()
-            name_font = get_appropriate_font(self.engine.fonts, enemy_name, 'small')
-            name_text = name_font.render(enemy_name, True, Colors.WHITE)
-            name_rect = name_text.get_rect(centerx=x + enemy_width // 2, y=y + visual_area_height + 5)
-            surface.blit(name_text, name_rect)
-            
-            # HP表示（名前の下に）
-            hp_text = font_small.render(f"{enemy.current_hp}/{enemy.max_hp}", True, Colors.WHITE)
-            hp_rect = hp_text.get_rect(centerx=x + enemy_width // 2, y=y + visual_area_height + 20)
-            surface.blit(hp_text, hp_rect)
-            
-            # HPバー（HPテキストの下に）
-            hp_bar_width = enemy_width - 20
-            hp_bar_height = 12
-            
-            hp_bg_rect = pygame.Rect(x + 10, y + visual_area_height + 35, hp_bar_width, hp_bar_height)
-            pygame.draw.rect(surface, Colors.DARK_GRAY, hp_bg_rect)
-            
-            hp_fg_rect = pygame.Rect(x + 10, y + visual_area_height + 35, int(hp_bar_width * hp_ratio), hp_bar_height)
-            hp_color = enemy.get_status_color()
-            pygame.draw.rect(surface, hp_color, hp_fg_rect)
-            
-            # 状態表示（HPバーの下に）
-            status_texts = enemy.get_status_text()
-            status_y_offset = visual_area_height + 52
-            for j, status in enumerate(status_texts[:1]):  # 最大1個まで（スペース節約）
-                status_font = get_appropriate_font(self.engine.fonts, status, 'small')
-                status_text = status_font.render(status, True, Colors.LIGHT_GRAY)
-                surface.blit(status_text, (x + 5, y + status_y_offset + j * 15))
-            
-            # 次回行動予告表示
-            next_action_info = enemy.get_next_action_info()
-            if next_action_info:
-                next_y = y + visual_area_height + 70
-                
-                # 次回行動アイコンと名前
-                action_icon = next_action_info.get('icon', '❓')
-                action_name = next_action_info.get('name', '不明')
-                
-                # アイコンを表示
-                icon_text = font_small.render(action_icon, True, Colors.YELLOW)
-                surface.blit(icon_text, (x + 5, next_y))
-                
-                # 行動名を表示
-                action_font = get_appropriate_font(self.engine.fonts, action_name, 'small')
-                name_text = action_font.render(action_name, True, Colors.YELLOW)
-                surface.blit(name_text, (x + 25, next_y))
-                
-                # ダメージや効果値を表示
-                if 'damage' in next_action_info:
-                    damage_str = f"{next_action_info['damage']}ダメージ"
-                    damage_font = get_appropriate_font(self.engine.fonts, damage_str, 'small')
-                    damage_text = damage_font.render(damage_str, True, Colors.RED)
-                    surface.blit(damage_text, (x + 5, next_y + 20))
-                elif 'heal_amount' in next_action_info:
-                    heal_str = f"{next_action_info['heal_amount']}回復"
-                    heal_font = get_appropriate_font(self.engine.fonts, heal_str, 'small')
-                    heal_text = heal_font.render(heal_str, True, Colors.GREEN)
-                    surface.blit(heal_text, (x + 5, next_y + 20))
-                elif 'effect_value' in next_action_info:
-                    effect_str = f"効果: {next_action_info['effect_value']}%"
-                    effect_font = get_appropriate_font(self.engine.fonts, effect_str, 'small')
-                    effect_text = effect_font.render(effect_str, True, Colors.BLUE)
-                    surface.blit(effect_text, (x + 5, next_y + 20))
-            
-            # 攻撃タイマー（最下部に配置）
-            attack_progress = enemy.attack_timer / enemy.attack_interval
-            timer_y = y + enemy_height - 20
-            timer_rect = pygame.Rect(x + 10, timer_y, hp_bar_width, 6)
-            pygame.draw.rect(surface, Colors.DARK_GRAY, timer_rect)
-            
-            timer_fg_rect = pygame.Rect(x + 10, timer_y, int(hp_bar_width * attack_progress), 6)
-            pygame.draw.rect(surface, Colors.ORANGE, timer_fg_rect)
-            
-            # タイマーラベル（小さく）
-            timer_label_str = "次の行動"
-            timer_font = get_appropriate_font(self.engine.fonts, timer_label_str, 'small')
-            timer_label = timer_font.render(timer_label_str, True, Colors.LIGHT_GRAY)
-            surface.blit(timer_label, (x + 10, timer_y - 12))
+            # 行動予告を描画
+            self.ui_renderer.render_enemy_action_preview(
+                surface, enemy, x, y, enemy_width, enemy_height
+            )
     
     def _get_all_enemy_positions(self) -> List[tuple]:
         """全敵の表示位置を取得（クリック判定用）"""
         positions = []
-        enemy_size = 240  # スライム単体のサイズ（180から240に拡大）
+        enemy_size = ENEMY_DISPLAY_SIZE  # スライム単体のサイズ
         enemy_spacing = 30
         start_x = self.battle_ui_x
         start_y = self.battle_ui_y
@@ -1200,7 +1108,7 @@ class BattleHandler:
     
     def _get_enemy_display_position(self, target_enemy: Enemy) -> tuple:
         """特定の敵の表示位置を取得（ダメージ数値用）"""
-        enemy_size = 240  # スライム単体のサイズ（180から240に拡大）
+        enemy_size = ENEMY_DISPLAY_SIZE  # スライム単体のサイズ
         enemy_spacing = 30
         start_x = self.battle_ui_x
         start_y = self.battle_ui_y

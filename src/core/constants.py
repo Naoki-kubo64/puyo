@@ -262,6 +262,30 @@ class BalanceConfig:
 DEFAULT_BALANCE = BalanceConfig()
 
 # ============================================================================
+# 戦闘UI関連定数
+# ============================================================================
+
+# 戦闘関連タイミング
+BATTLE_COUNTDOWN_DURATION = 3.0
+DAMAGE_FLASH_DURATION = 0.5
+DAMAGE_FLASH_TIMER_RESET = 0.3
+
+# 戦闘表示関連
+ENEMY_DISPLAY_SIZE = 240
+ENEMY_INTENT_DISPLAY_OFFSET_Y = -30
+BATTLE_UI_POSITION_OFFSET_RATIO = 0.5
+
+# アニメーション関連
+PUYO_EFFECT_BASE_RATIO = 0.8
+PUYO_EFFECT_PULSE_RATIO = 0.4
+CHAIN_DELAY_BETWEEN_GROUPS = 0.1
+CHAIN_ANIMATION_DURATION = 0.5
+
+# グリッド関連
+GRID_BORDER_WIDTH = 2
+GRID_CELL_BORDER_WIDTH = 1
+
+# ============================================================================
 # 数学関連ユーティリティ
 # ============================================================================
 

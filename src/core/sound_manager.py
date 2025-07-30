@@ -47,8 +47,8 @@ class SoundManager:
         if not self.enabled:
             return
         
-        # SEフォルダのパス
-        se_folder = os.path.join(os.path.dirname(__file__), '..', '..', 'SE')
+        # SEフォルダのパス（assetsフォルダ内に移動済み）
+        se_folder = os.path.join(os.path.dirname(__file__), '..', '..', 'assets')
         
         # 音源ファイルのマッピング
         sound_files = {

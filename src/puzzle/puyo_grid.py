@@ -91,7 +91,7 @@ class PuyoGrid:
         self.chain_animation_active = False
         self.chain_queue = []  # 連鎖待ちキュー
         self.current_chain_timer = 0.0
-        self.chain_delay_per_group = 0.1  # 塊ごとの遅延時間（高速化：0.1秒）
+        self.chain_delay_per_group = CHAIN_DELAY_BETWEEN_GROUPS  # 塊ごとの遅延時間
         
         # アニメーション用連鎖統計
         self.animated_chain_level = 0
@@ -1092,7 +1092,7 @@ class PuyoGrid:
         
         for puyo_type, filename in image_mapping.items():
             try:
-                image_path = f"Picture/{filename}"
+                image_path = f"assets/{filename}"
                 image = pygame.image.load(image_path)
                 # ぷよサイズに合わせてスケール（少し小さめにして、ぷよの上に重ねる）
                 scaled_size = int(self.puyo_size * 0.7)

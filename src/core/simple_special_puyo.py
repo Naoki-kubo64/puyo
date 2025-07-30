@@ -69,9 +69,9 @@ class SimpleSpecialPuyo:
         """アイコン画像を読み込み"""
         try:
             if self.special_type == SimpleSpecialType.HEAL:
-                self.icon_image = pygame.image.load("Picture/HEAL.png")
+                self.icon_image = pygame.image.load("assets/HEAL.png")
             elif self.special_type == SimpleSpecialType.BOMB:
-                self.icon_image = pygame.image.load("Picture/BOMB.png")
+                self.icon_image = pygame.image.load("assets/BOMB.png")
             
             if self.icon_image:
                 # 42x42にリサイズ

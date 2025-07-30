@@ -6,7 +6,7 @@ import sys
 import os
 
 # パス設定
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from src.dungeon.dungeon_map import DungeonMap, NodeType
 

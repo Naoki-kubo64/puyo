@@ -1500,9 +1500,9 @@ class AuthenticDemoHandler:
             
             # 特殊ぷよタイプに応じた画像を読み込み
             if special_type == SimpleSpecialType.HEAL:
-                icon_image = pygame.image.load("Picture/HEAL.png")
+                icon_image = pygame.image.load("assets/HEAL.png")
             elif special_type == SimpleSpecialType.BOMB:
-                icon_image = pygame.image.load("Picture/BOMB.png")
+                icon_image = pygame.image.load("assets/BOMB.png")
             else:
                 logger.warning(f"Unknown special type for NEXT: {special_type}")
                 return

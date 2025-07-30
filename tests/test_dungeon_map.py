@@ -8,11 +8,11 @@ import os
 import logging
 
 # パス設定
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from src.core.game_engine import GameEngine
-from src.core.constants import GameState
-from src.dungeon.map_handler import DungeonMapHandler
+from core.game_engine import GameEngine
+from core.constants import GameState
+from dungeon.map_handler import DungeonMapHandler
 
 def test_dungeon_map():
     """ダンジョンマップシステムのテスト"""
