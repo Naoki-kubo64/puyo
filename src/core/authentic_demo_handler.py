@@ -842,9 +842,9 @@ class AuthenticDemoHandler:
         self.next_pair_colors = None
         self._update_next_pair_colors()
         
-        # 本家風タイミング制御（最適化）
+        # 本家風タイミング制御（即座スポーン）
         self.spawn_timer = 0.0
-        self.spawn_interval = 0.05  # 着地後すぐに次のぷよをスポーン（50ms）
+        self.spawn_interval = 0.0  # 着地後即座に次のぷよをスポーン（遅延なし）
         
         # 本家風チェイン処理
         self.chain_delay_timer = 0.0

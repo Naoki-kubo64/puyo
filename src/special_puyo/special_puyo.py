@@ -75,9 +75,9 @@ class SpecialPuyo:
             # 既存の特殊ぷよ
             SpecialPuyoType.BOMB: SpecialEffect(
                 effect_type="explosion",
-                power=20,
+                power=12,
                 range=2,
-                description="周囲2マスのぷよを破壊し、20ダメージ"
+                description="周囲2マスのぷよを破壊し、12ダメージ"
             ),
             SpecialPuyoType.LIGHTNING: SpecialEffect(
                 effect_type="lightning_strike",
@@ -313,7 +313,7 @@ class SpecialPuyoManager:
         self.rarity_weights = {
             # 既存の特殊ぷよ（出現率調整）
             SpecialPuyoType.HEAL: 0.18,
-            SpecialPuyoType.BOMB: 0.15,
+            SpecialPuyoType.BOMB: 0.08,
             SpecialPuyoType.LIGHTNING: 0.12,
             SpecialPuyoType.SHIELD: 0.10,
             SpecialPuyoType.FREEZE: 0.08,
